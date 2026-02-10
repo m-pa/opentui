@@ -693,7 +693,8 @@ export async function run(renderer: CliRenderer): Promise<void> {
       }
     }
 
-    engine.drawScene(sceneRoot, framebuffer, deltaTime)
+    framebuffer.clear(RGBA.fromValues(0, 0, 0, 0))
+    await engine.drawScene(sceneRoot, framebuffer, deltaTime)
   })
 
   // Store state for cleanup
