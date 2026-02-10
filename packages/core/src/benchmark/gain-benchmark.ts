@@ -13,8 +13,8 @@ type ScenarioResult = {
   p95Ms: number
 }
 
-const ITERATIONS = 1000
-const WARMUP_ITERATIONS = 10
+const ITERATIONS = 25000
+const WARMUP_ITERATIONS = 1000
 const STRENGTH = 0.7
 const baseScenarios: Array<{ width: number; height: number }> = [
   { width: 40, height: 20 },
