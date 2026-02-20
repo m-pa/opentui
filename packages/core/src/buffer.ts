@@ -55,7 +55,7 @@ export class OptimizedBuffer {
     bg: Float32Array
     attributes: Uint32Array
   } | null = null
-  private _gainScratch: Float32Array | null = null
+  private _attenuateScratch: Float32Array | null = null
   private _destroyed: boolean = false
 
   get ptr(): Pointer {
@@ -240,24 +240,24 @@ export class OptimizedBuffer {
     this.lib.bufferSetCellWithAlphaBlending(this.bufferPtr, x, y, char, fg, bg, attributes)
   }
 
-  public gain(cells: Array<[number, number, number]> | Float32Array, strength: number = 1): void {
+  public attenuate(cells: Array<[number, number, number]> | Float32Array, strength: number = 1): void {
     this.guard()
     if (strength === 0 || cells.length === 0) return
 
     if (cells instanceof Float32Array) {
       const tripletCount = Math.floor(cells.length / 3)
       if (tripletCount === 0) return
-      this.lib.bufferGain(this.bufferPtr, ptr(cells), tripletCount, strength)
+      this.lib.bufferAttenuate(this.bufferPtr, ptr(cells), tripletCount, strength)
       return
     }
 
     const tripletCount = cells.length
     const requiredLength = tripletCount * 3
-    let triplets = this._gainScratch
+    let triplets = this._attenuateScratch
 
     if (!triplets || triplets.length < requiredLength) {
       triplets = new Float32Array(requiredLength)
-      this._gainScratch = triplets
+      this._attenuateScratch = triplets
     }
 
     for (let i = 0; i < tripletCount; i++) {
@@ -268,7 +268,7 @@ export class OptimizedBuffer {
       triplets[base + 2] = factor
     }
 
-    this.lib.bufferGain(this.bufferPtr, ptr(triplets), tripletCount, strength)
+    this.lib.bufferAttenuate(this.bufferPtr, ptr(triplets), tripletCount, strength)
   }
 
   public drawText(

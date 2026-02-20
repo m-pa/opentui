@@ -89,13 +89,13 @@ function runScenario({ width, height, mode }: Scenario): ScenarioResult {
   bg.fill(1)
 
   for (let i = 0; i < WARMUP_ITERATIONS; i++) {
-    buffer.gain(cells, STRENGTH)
+    buffer.attenuate(cells, STRENGTH)
   }
 
   const samples = new Array<number>(ITERATIONS)
   for (let i = 0; i < ITERATIONS; i++) {
     const start = performance.now()
-    buffer.gain(cells, STRENGTH)
+    buffer.attenuate(cells, STRENGTH)
     samples[i] = performance.now() - start
   }
 

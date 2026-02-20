@@ -254,7 +254,7 @@ function getOpenTUILib(libPath?: string) {
       args: ["ptr", "u32", "u32", "u32", "u32", "ptr"],
       returns: "void",
     },
-    bufferGain: {
+    bufferAttenuate: {
       args: ["ptr", "ptr", "usize", "f32"],
       returns: "void",
     },
@@ -1439,7 +1439,7 @@ export interface RenderLib {
     attributes?: number,
   ) => void
   bufferFillRect: (buffer: Pointer, x: number, y: number, width: number, height: number, color: RGBA) => void
-  bufferGain: (buffer: Pointer, tripletsPtr: Pointer, tripletCount: number, strength: number) => void
+  bufferAttenuate: (buffer: Pointer, tripletsPtr: Pointer, tripletCount: number, strength: number) => void
   bufferDrawSuperSampleBuffer: (
     buffer: Pointer,
     x: number,
@@ -2168,8 +2168,8 @@ class FFIRenderLib implements RenderLib {
     this.opentui.symbols.bufferFillRect(buffer, x, y, width, height, bg)
   }
 
-  public bufferGain(buffer: Pointer, tripletsPtr: Pointer, tripletCount: number, strength: number) {
-    this.opentui.symbols.bufferGain(buffer, tripletsPtr, tripletCount, strength)
+  public bufferAttenuate(buffer: Pointer, tripletsPtr: Pointer, tripletCount: number, strength: number) {
+    this.opentui.symbols.bufferAttenuate(buffer, tripletsPtr, tripletCount, strength)
   }
 
   public bufferDrawSuperSampleBuffer(

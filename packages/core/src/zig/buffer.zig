@@ -594,7 +594,7 @@ pub const OptimizedBuffer = struct {
         return self.respectAlpha;
     }
 
-    pub fn gain(self: *OptimizedBuffer, triplets: []const f32, strength: f32) void {
+    pub fn attenuate(self: *OptimizedBuffer, triplets: []const f32, strength: f32) void {
         if (strength == 0 or triplets.len < 3) return;
 
         const width = self.width;

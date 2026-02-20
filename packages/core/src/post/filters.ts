@@ -491,7 +491,7 @@ export class VignetteEffect {
       this._computeFactors(width, height)
     }
 
-    buffer.gain(this.precomputedAttenuationTriplets!, this._strength)
+    buffer.attenuate(this.precomputedAttenuationTriplets!, this._strength)
   }
 }
 
@@ -599,7 +599,7 @@ export class GainEffect {
       this._computeFactors(width, height)
     }
     console.log(this._gain)
-    buffer.gain(this.precomputedGainTriplets!, this._gain)
+    buffer.attenuate(this.precomputedGainTriplets!, this._gain)
   }
 }
 
