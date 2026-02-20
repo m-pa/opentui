@@ -546,10 +546,14 @@ export class BrightnessEffect {
 }
 
 /**
- * Adjusts the overall gain of the buffer.
+ * Adjusts the overall gain of the buffer using the native gain method.
  */
 export class GainEffect {
   private _gain: number
+  // Stores packed triplets [x, y, baseGain=1.0] per pixel for uniform gain
+  private precomputedGainTriplets: Float32Array | null = null
+  private cachedWidth: number = -1
+  private cachedHeight: number = -1
 
   constructor(gain: number = 1.0) {
     this._gain = Math.max(0, gain) // Ensure gain is non-negative
@@ -563,35 +567,39 @@ export class GainEffect {
     return this._gain
   }
 
+  private _computeFactors(width: number, height: number): void {
+    this.precomputedGainTriplets = new Float32Array(width * height * 3)
+    let i = 0
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        this.precomputedGainTriplets[i++] = x
+        this.precomputedGainTriplets[i++] = y
+        this.precomputedGainTriplets[i++] = 1.0 // Base gain of 1.0 for uniform effect
+      }
+    }
+    this.cachedWidth = width
+    this.cachedHeight = height
+  }
+
   /**
-   * Applies the gain adjustment to the buffer.
+   * Applies the gain adjustment to the buffer using the native gain method.
    */
   public apply(buffer: OptimizedBuffer): void {
-    const size = buffer.width * buffer.height
-    const fg = buffer.buffers.fg
-    const bg = buffer.buffers.bg
-    const factor = this._gain
+    const width = buffer.width
+    const height = buffer.height
 
     // No need to process if gain is 1 (no change)
-    if (factor === 1.0) {
+    if (this._gain === 1.0) {
       return
     }
 
-    for (let i = 0; i < size; i++) {
-      const colorIndex = i * 4
-
-      // Adjust foreground
-      fg[colorIndex] = Math.min(1.0, fg[colorIndex] * factor)
-      fg[colorIndex + 1] = Math.min(1.0, fg[colorIndex + 1] * factor)
-      fg[colorIndex + 2] = Math.min(1.0, fg[colorIndex + 2] * factor)
-      // Alpha fg[colorIndex + 3] remains unchanged
-
-      // Adjust background
-      bg[colorIndex] = Math.min(1.0, bg[colorIndex] * factor)
-      bg[colorIndex + 1] = Math.min(1.0, bg[colorIndex + 1] * factor)
-      bg[colorIndex + 2] = Math.min(1.0, bg[colorIndex + 2] * factor)
-      // Alpha bg[colorIndex + 3] remains unchanged
+    // Recompute base gain triplets if dimensions changed or factors haven't been computed yet
+    if (width !== this.cachedWidth || height !== this.cachedHeight || !this.precomputedGainTriplets) {
+      this._computeFactors(width, height)
     }
+    console.log(this._gain)
+    buffer.gain(this.precomputedGainTriplets!, this._gain)
   }
 }
 
