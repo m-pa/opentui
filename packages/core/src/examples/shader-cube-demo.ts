@@ -511,8 +511,8 @@ export async function run(renderer: CliRenderer): Promise<void> {
     }
 
     // Toggle debug mode for console caller info
-    if (key.name === "k") {
-      renderer.console.toggleDebugMode()
+    if (key.name === "o") {
+      renderer.console.toggle()
     }
 
     // Toggle texture effects
