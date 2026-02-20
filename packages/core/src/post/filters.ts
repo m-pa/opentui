@@ -546,6 +546,56 @@ export class BrightnessEffect {
 }
 
 /**
+ * Adjusts the overall gain of the buffer.
+ */
+export class GainEffect {
+  private _gain: number
+
+  constructor(gain: number = 1.0) {
+    this._gain = Math.max(0, gain) // Ensure gain is non-negative
+  }
+
+  public set gain(newGain: number) {
+    this._gain = Math.max(0, newGain)
+  }
+
+  public get gain(): number {
+    return this._gain
+  }
+
+  /**
+   * Applies the gain adjustment to the buffer.
+   */
+  public apply(buffer: OptimizedBuffer): void {
+    const size = buffer.width * buffer.height
+    const fg = buffer.buffers.fg
+    const bg = buffer.buffers.bg
+    const factor = this._gain
+
+    // No need to process if gain is 1 (no change)
+    if (factor === 1.0) {
+      return
+    }
+
+    for (let i = 0; i < size; i++) {
+      const colorIndex = i * 4
+
+      // Adjust foreground
+      fg[colorIndex] = Math.min(1.0, fg[colorIndex] * factor)
+      fg[colorIndex + 1] = Math.min(1.0, fg[colorIndex + 1] * factor)
+      fg[colorIndex + 2] = Math.min(1.0, fg[colorIndex + 2] * factor)
+      // Alpha fg[colorIndex + 3] remains unchanged
+
+      // Adjust background
+      bg[colorIndex] = Math.min(1.0, bg[colorIndex] * factor)
+      bg[colorIndex + 1] = Math.min(1.0, bg[colorIndex + 1] * factor)
+      bg[colorIndex + 2] = Math.min(1.0, bg[colorIndex + 2] * factor)
+      // Alpha bg[colorIndex + 3] remains unchanged
+    }
+  }
+}
+
+/**
  * Applies a simple box blur. (Expensive and may look bad with text).
  */
 export class BlurEffect {

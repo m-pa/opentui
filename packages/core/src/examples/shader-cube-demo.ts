@@ -23,7 +23,14 @@ import {
   AmbientLight,
 } from "three"
 import * as Filters from "../post/filters"
-import { DistortionEffect, VignetteEffect, BrightnessEffect, BlurEffect, BloomEffect } from "../post/filters"
+import {
+  DistortionEffect,
+  VignetteEffect,
+  BrightnessEffect,
+  BlurEffect,
+  BloomEffect,
+  GainEffect,
+} from "../post/filters"
 import type { OptimizedBuffer } from "../buffer"
 import { ThreeCliRenderer } from "../3d"
 
@@ -41,6 +48,7 @@ interface ShaderCubeDemoState {
   distortionEffectInstance: DistortionEffect
   vignetteEffectInstance: VignetteEffect
   brightnessEffectInstance: BrightnessEffect
+  gainEffectInstance: GainEffect
   blurEffectInstance: BlurEffect
   bloomEffectInstance: BloomEffect
   filterFunctions: { name: string; func: ((buffer: OptimizedBuffer, deltaTime: number) => void) | null }[]
@@ -100,6 +108,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
   const distortionEffectInstance = new DistortionEffect()
   const vignetteEffectInstance = new VignetteEffect()
   const brightnessEffectInstance = new BrightnessEffect()
+  const gainEffectInstance = new GainEffect()
   const blurEffectInstance = new BlurEffect(1)
   const bloomEffectInstance = new BloomEffect(0.7, 0.3, 2)
 
@@ -117,6 +126,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Bloom", func: bloomEffectInstance.apply.bind(bloomEffectInstance) },
     { name: "Distortion", func: distortionEffectInstance.apply.bind(distortionEffectInstance) },
     { name: "Brightness", func: brightnessEffectInstance.apply.bind(brightnessEffectInstance) },
+    { name: "Gain", func: gainEffectInstance.apply.bind(gainEffectInstance) },
   ]
 
   // Box in the background to show alpha channel works
@@ -399,6 +409,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
         param1Text = `Brightness Factor: ${brightnessEffectInstance.brightness.toFixed(2)} ([/])`
         param1Visible = true
         break
+      case "Gain":
+        param1Text = `Gain Factor: ${gainEffectInstance.gain.toFixed(2)} ([/])`
+        param1Visible = true
+        break
       case "Blur":
         param1Text = `Blur Radius: ${blurEffectInstance.radius} ([/])`
         param1Visible = true
@@ -568,6 +582,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           brightnessEffectInstance.brightness = Math.max(0, brightnessEffectInstance.brightness - 0.05)
           paramChanged = true
           break
+        case "Gain":
+          gainEffectInstance.gain = Math.max(0, gainEffectInstance.gain - 0.05)
+          paramChanged = true
+          break
         case "Blur":
           blurEffectInstance.radius = Math.max(0, blurEffectInstance.radius - 1)
           paramChanged = true
@@ -592,6 +610,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           break
         case "Brightness":
           brightnessEffectInstance.brightness = Math.min(50, brightnessEffectInstance.brightness + 0.05)
+          paramChanged = true
+          break
+        case "Gain":
+          gainEffectInstance.gain = Math.min(50, gainEffectInstance.gain + 0.05)
           paramChanged = true
           break
         case "Blur":
@@ -711,6 +733,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     distortionEffectInstance,
     vignetteEffectInstance,
     brightnessEffectInstance,
+    gainEffectInstance,
     blurEffectInstance,
     bloomEffectInstance,
     filterFunctions,
