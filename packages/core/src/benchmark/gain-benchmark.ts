@@ -15,7 +15,7 @@ type ScenarioResult = {
 
 const ITERATIONS = 5000
 const WARMUP_ITERATIONS = 100
-const STRENGTH = 0.7
+const GAIN_FACTOR = 1.3
 const baseScenarios: Array<{ width: number; height: number }> = [
   { width: 40, height: 20 },
   { width: 80, height: 24 },
@@ -37,8 +37,8 @@ function buildCells(width: number, height: number): Array<[number, number, numbe
     const yFactor = y / maxY
     for (let x = 0; x < width; x++) {
       const xFactor = x / maxX
-      const baseAttenuation = xFactor * yFactor
-      cells[i++] = [x, y, baseAttenuation]
+      const baseGain = 0.5 + 0.5 * (xFactor * yFactor)
+      cells[i++] = [x, y, baseGain * GAIN_FACTOR]
     }
   }
 
@@ -55,10 +55,10 @@ function buildTriplets(width: number, height: number): Float32Array {
     const yFactor = y / maxY
     for (let x = 0; x < width; x++) {
       const xFactor = x / maxX
-      const baseAttenuation = xFactor * yFactor
+      const baseGain = 0.5 + 0.5 * (xFactor * yFactor)
       triplets[i++] = x
       triplets[i++] = y
-      triplets[i++] = baseAttenuation
+      triplets[i++] = baseGain * GAIN_FACTOR
     }
   }
 
@@ -89,13 +89,13 @@ function runScenario({ width, height, mode }: Scenario): ScenarioResult {
   bg.fill(1)
 
   for (let i = 0; i < WARMUP_ITERATIONS; i++) {
-    buffer.attenuate(cells, STRENGTH)
+    buffer.gain(cells)
   }
 
   const samples = new Array<number>(ITERATIONS)
   for (let i = 0; i < ITERATIONS; i++) {
     const start = performance.now()
-    buffer.attenuate(cells, STRENGTH)
+    buffer.gain(cells)
     samples[i] = performance.now() - start
   }
 
