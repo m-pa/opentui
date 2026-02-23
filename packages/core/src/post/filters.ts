@@ -550,13 +550,15 @@ export class BrightnessEffect {
  */
 export class GainEffect {
   private _gain: number
+  private _cachedGain: number
   // Stores packed triplets [x, y, baseGain=1.0] per pixel for uniform gain
   private precomputedGainTriplets: Float32Array | null = null
   private cachedWidth: number = -1
   private cachedHeight: number = -1
 
   constructor(gain: number = 1.0) {
-    this._gain = Math.max(0, gain) // Ensure gain is non-negative
+    this._gain = Math.max(0, gain)
+    this._cachedGain = this._gain
   }
 
   public set gain(newGain: number) {
@@ -575,11 +577,12 @@ export class GainEffect {
       for (let x = 0; x < width; x++) {
         this.precomputedGainTriplets[i++] = x
         this.precomputedGainTriplets[i++] = y
-        this.precomputedGainTriplets[i++] = 1.0 // Base gain of 1.0 for uniform effect
+        this.precomputedGainTriplets[i++] = this._gain
       }
     }
     this.cachedWidth = width
     this.cachedHeight = height
+    this._cachedGain = this._gain
   }
 
   /**
@@ -594,12 +597,17 @@ export class GainEffect {
       return
     }
 
-    // Recompute base gain triplets if dimensions changed or factors haven't been computed yet
-    if (width !== this.cachedWidth || height !== this.cachedHeight || !this.precomputedGainTriplets) {
+    // Recompute base gain triplets if dimensions changed, gain changed, or factors haven't been computed yet
+    if (
+      width !== this.cachedWidth ||
+      height !== this.cachedHeight ||
+      this._gain !== this._cachedGain ||
+      !this.precomputedGainTriplets
+    ) {
       this._computeFactors(width, height)
     }
-    console.log(this._gain)
-    buffer.attenuate(this.precomputedGainTriplets!, this._gain)
+
+    buffer.gain(this.precomputedGainTriplets!)
   }
 }
 
