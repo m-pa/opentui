@@ -134,6 +134,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Brightness", func: brightnessEffectInstance.apply.bind(brightnessEffectInstance) },
     { name: "Gain", func: gainEffectInstance.apply.bind(gainEffectInstance) },
     { name: "Saturation", func: saturationEffectInstance.apply.bind(saturationEffectInstance) },
+    { name: "Saturation (Uniform)", func: (buf, _dt) => Filters.applySaturation(buf, 0.5) },
   ]
 
   // Box in the background to show alpha channel works
