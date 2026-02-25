@@ -302,6 +302,37 @@ export class OptimizedBuffer {
     this.lib.bufferGain(this.bufferPtr, ptr(triplets), tripletCount)
   }
 
+  public saturate(cells: Array<[number, number, number]> | Float32Array, strength: number = 1): void {
+    this.guard()
+    if (strength === 1.0 || cells.length === 0) return
+
+    if (cells instanceof Float32Array) {
+      const tripletCount = Math.floor(cells.length / 3)
+      if (tripletCount === 0) return
+      this.lib.bufferSaturate(this.bufferPtr, ptr(cells), tripletCount, strength)
+      return
+    }
+
+    const tripletCount = cells.length
+    const requiredLength = tripletCount * 3
+    let triplets = this._attenuateScratch
+
+    if (!triplets || triplets.length < requiredLength) {
+      triplets = new Float32Array(requiredLength)
+      this._attenuateScratch = triplets
+    }
+
+    for (let i = 0; i < tripletCount; i++) {
+      const [x, y, factor] = cells[i]
+      const base = i * 3
+      triplets[base] = x
+      triplets[base + 1] = y
+      triplets[base + 2] = factor
+    }
+
+    this.lib.bufferSaturate(this.bufferPtr, ptr(triplets), tripletCount, strength)
+  }
+
   public drawText(
     text: string,
     x: number,

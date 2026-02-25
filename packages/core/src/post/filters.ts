@@ -51,38 +51,6 @@ export function applyGrayscale(buffer: OptimizedBuffer): void {
 }
 
 /**
- * Applies a saturation adjustment to the buffer.
- * @param strength - 0 = 0% saturation (fully grayscale), 1 = 100% saturation (no change)
- */
-export function applySaturation(buffer: OptimizedBuffer, strength: number = 1): void {
-  const size = buffer.width * buffer.height
-  const fg = buffer.buffers.fg
-  const bg = buffer.buffers.bg
-
-  for (let i = 0; i < size; i++) {
-    const colorIndex = i * 4
-
-    // Adjust foreground saturation
-    const fgR = fg[colorIndex]
-    const fgG = fg[colorIndex + 1]
-    const fgB = fg[colorIndex + 2]
-    const fgLum = 0.299 * fgR + 0.587 * fgG + 0.114 * fgB
-    fg[colorIndex] = fgLum + (fgR - fgLum) * strength
-    fg[colorIndex + 1] = fgLum + (fgG - fgLum) * strength
-    fg[colorIndex + 2] = fgLum + (fgB - fgLum) * strength
-
-    // Adjust background saturation
-    const bgR = bg[colorIndex]
-    const bgG = bg[colorIndex + 1]
-    const bgB = bg[colorIndex + 2]
-    const bgLum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB
-    bg[colorIndex] = bgLum + (bgR - bgLum) * strength
-    bg[colorIndex + 1] = bgLum + (bgG - bgLum) * strength
-    bg[colorIndex + 2] = bgLum + (bgB - bgLum) * strength
-  }
-}
-
-/**
  * Applies a sepia tone to the buffer.
  */
 export function applySepia(buffer: OptimizedBuffer): void {
@@ -640,6 +608,72 @@ export class GainEffect {
     }
 
     buffer.gain(this.precomputedGainTriplets!)
+  }
+}
+
+/**
+ * Adjusts the overall saturation of the buffer using the native saturate method.
+ */
+export class SaturationEffect {
+  private _saturation: number
+  private _cachedSaturation: number
+  // Stores packed triplets [x, y, baseSaturation=1.0] per pixel for uniform saturation
+  private precomputedSaturationTriplets: Float32Array | null = null
+  private cachedWidth: number = -1
+  private cachedHeight: number = -1
+
+  constructor(saturation: number = 1.0) {
+    this._saturation = Math.max(0, saturation)
+    this._cachedSaturation = this._saturation
+  }
+
+  public set saturation(newSaturation: number) {
+    this._saturation = Math.max(0, newSaturation)
+  }
+
+  public get saturation(): number {
+    return this._saturation
+  }
+
+  private _computeFactors(width: number, height: number): void {
+    this.precomputedSaturationTriplets = new Float32Array(width * height * 3)
+    let i = 0
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        this.precomputedSaturationTriplets[i++] = x
+        this.precomputedSaturationTriplets[i++] = y
+        this.precomputedSaturationTriplets[i++] = this._saturation
+      }
+    }
+    this.cachedWidth = width
+    this.cachedHeight = height
+    this._cachedSaturation = this._saturation
+  }
+
+  /**
+   * Applies the saturation adjustment to the buffer using the native saturate method.
+   */
+  public apply(buffer: OptimizedBuffer): void {
+    const width = buffer.width
+    const height = buffer.height
+
+    // No need to process if saturation is 1 (no change)
+    if (this._saturation === 1.0) {
+      return
+    }
+
+    // Recompute base saturation triplets if dimensions changed, saturation changed, or factors haven't been computed yet
+    if (
+      width !== this.cachedWidth ||
+      height !== this.cachedHeight ||
+      this._saturation !== this._cachedSaturation ||
+      !this.precomputedSaturationTriplets
+    ) {
+      this._computeFactors(width, height)
+    }
+
+    buffer.saturate(this.precomputedSaturationTriplets!, this._saturation)
   }
 }
 

@@ -603,6 +603,10 @@ pub const OptimizedBuffer = struct {
         buffer_effects.attenuate(self, triplets, strength);
     }
 
+    pub fn saturate(self: *OptimizedBuffer, triplets: []const f32, strength: f32) void {
+        buffer_effects.saturate(self, triplets, strength);
+    }
+
     pub fn getId(self: *const OptimizedBuffer) []const u8 {
         return self.id;
     }

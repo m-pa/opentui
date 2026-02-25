@@ -30,6 +30,7 @@ import {
   BlurEffect,
   BloomEffect,
   GainEffect,
+  SaturationEffect,
 } from "../post/filters"
 import type { OptimizedBuffer } from "../buffer"
 import { ThreeCliRenderer } from "../3d"
@@ -51,7 +52,7 @@ interface ShaderCubeDemoState {
   gainEffectInstance: GainEffect
   blurEffectInstance: BlurEffect
   bloomEffectInstance: BloomEffect
-  saturationStrength: number
+  saturationEffectInstance: SaturationEffect
   filterFunctions: { name: string; func: ((buffer: OptimizedBuffer, deltaTime: number) => void) | null }[]
   currentFilterIndex: number
   time: number
@@ -112,8 +113,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
   const gainEffectInstance = new GainEffect()
   const blurEffectInstance = new BlurEffect(1)
   const bloomEffectInstance = new BloomEffect(0.7, 0.3, 2)
-
-  let saturationStrength = 1
+  const saturationEffectInstance = new SaturationEffect()
 
   const filterFunctions: { name: string; func: ((buffer: OptimizedBuffer, deltaTime: number) => void) | null }[] = [
     { name: "None", func: null },
@@ -130,7 +130,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Distortion", func: distortionEffectInstance.apply.bind(distortionEffectInstance) },
     { name: "Brightness", func: brightnessEffectInstance.apply.bind(brightnessEffectInstance) },
     { name: "Gain", func: gainEffectInstance.apply.bind(gainEffectInstance) },
-    { name: "Saturation", func: (buf, _dt) => Filters.applySaturation(buf, saturationStrength) },
+    { name: "Saturation", func: saturationEffectInstance.apply.bind(saturationEffectInstance) },
   ]
 
   // Box in the background to show alpha channel works
@@ -428,7 +428,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
         param2Visible = true
         break
       case "Saturation":
-        param1Text = `Saturation: ${saturationStrength.toFixed(2)} ([/])`
+        param1Text = `Saturation: ${saturationEffectInstance.saturation.toFixed(2)} ([/])`
         param1Visible = true
         break
     }
@@ -603,7 +603,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
           paramChanged = true
           break
         case "Saturation":
-          saturationStrength = Math.max(0, saturationStrength - 0.05)
+          saturationEffectInstance.saturation = Math.max(0, saturationEffectInstance.saturation - 0.05)
           paramChanged = true
           break
       }
@@ -637,7 +637,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
           paramChanged = true
           break
         case "Saturation":
-          saturationStrength = Math.min(10, saturationStrength + 0.05)
+          saturationEffectInstance.saturation = Math.min(10, saturationEffectInstance.saturation + 0.05)
           paramChanged = true
           break
       }
@@ -752,7 +752,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     gainEffectInstance,
     blurEffectInstance,
     bloomEffectInstance,
-    saturationStrength,
+    saturationEffectInstance,
     filterFunctions,
     currentFilterIndex,
     time,
