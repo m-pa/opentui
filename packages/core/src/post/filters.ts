@@ -51,6 +51,38 @@ export function applyGrayscale(buffer: OptimizedBuffer): void {
 }
 
 /**
+ * Applies a saturation adjustment to the buffer.
+ * @param strength - 0 = 0% saturation (fully grayscale), 1 = 100% saturation (no change)
+ */
+export function applySaturation(buffer: OptimizedBuffer, strength: number = 1): void {
+  const size = buffer.width * buffer.height
+  const fg = buffer.buffers.fg
+  const bg = buffer.buffers.bg
+
+  for (let i = 0; i < size; i++) {
+    const colorIndex = i * 4
+
+    // Adjust foreground saturation
+    const fgR = fg[colorIndex]
+    const fgG = fg[colorIndex + 1]
+    const fgB = fg[colorIndex + 2]
+    const fgLum = 0.299 * fgR + 0.587 * fgG + 0.114 * fgB
+    fg[colorIndex] = fgLum + (fgR - fgLum) * strength
+    fg[colorIndex + 1] = fgLum + (fgG - fgLum) * strength
+    fg[colorIndex + 2] = fgLum + (fgB - fgLum) * strength
+
+    // Adjust background saturation
+    const bgR = bg[colorIndex]
+    const bgG = bg[colorIndex + 1]
+    const bgB = bg[colorIndex + 2]
+    const bgLum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB
+    bg[colorIndex] = bgLum + (bgR - bgLum) * strength
+    bg[colorIndex + 1] = bgLum + (bgG - bgLum) * strength
+    bg[colorIndex + 2] = bgLum + (bgB - bgLum) * strength
+  }
+}
+
+/**
  * Applies a sepia tone to the buffer.
  */
 export function applySepia(buffer: OptimizedBuffer): void {

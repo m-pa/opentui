@@ -51,6 +51,7 @@ interface ShaderCubeDemoState {
   gainEffectInstance: GainEffect
   blurEffectInstance: BlurEffect
   bloomEffectInstance: BloomEffect
+  saturationStrength: number
   filterFunctions: { name: string; func: ((buffer: OptimizedBuffer, deltaTime: number) => void) | null }[]
   currentFilterIndex: number
   time: number
@@ -112,6 +113,8 @@ export async function run(renderer: CliRenderer): Promise<void> {
   const blurEffectInstance = new BlurEffect(1)
   const bloomEffectInstance = new BloomEffect(0.7, 0.3, 2)
 
+  let saturationStrength = 1
+
   const filterFunctions: { name: string; func: ((buffer: OptimizedBuffer, deltaTime: number) => void) | null }[] = [
     { name: "None", func: null },
     { name: "Scanlines", func: (buf, _dt) => Filters.applyScanlines(buf, 0.85) },
@@ -127,6 +130,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Distortion", func: distortionEffectInstance.apply.bind(distortionEffectInstance) },
     { name: "Brightness", func: brightnessEffectInstance.apply.bind(brightnessEffectInstance) },
     { name: "Gain", func: gainEffectInstance.apply.bind(gainEffectInstance) },
+    { name: "Saturation", func: (buf, _dt) => Filters.applySaturation(buf, saturationStrength) },
   ]
 
   // Box in the background to show alpha channel works
@@ -423,6 +427,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
         param1Visible = true
         param2Visible = true
         break
+      case "Saturation":
+        param1Text = `Saturation: ${saturationStrength.toFixed(2)} ([/])`
+        param1Visible = true
+        break
     }
 
     param1StatusText.content = param1Text
@@ -594,6 +602,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           bloomEffectInstance.strength = Math.max(0, bloomEffectInstance.strength - 0.05)
           paramChanged = true
           break
+        case "Saturation":
+          saturationStrength = Math.max(0, saturationStrength - 0.05)
+          paramChanged = true
+          break
       }
     } else if (key.name === "]") {
       switch (currentFilterName) {
@@ -622,6 +634,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           break
         case "Bloom":
           bloomEffectInstance.strength = Math.min(25, bloomEffectInstance.strength + 0.05)
+          paramChanged = true
+          break
+        case "Saturation":
+          saturationStrength = Math.min(10, saturationStrength + 0.05)
           paramChanged = true
           break
       }
@@ -736,6 +752,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     gainEffectInstance,
     blurEffectInstance,
     bloomEffectInstance,
+    saturationStrength,
     filterFunctions,
     currentFilterIndex,
     time,
