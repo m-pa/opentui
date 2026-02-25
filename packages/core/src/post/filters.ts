@@ -581,6 +581,14 @@ export class GainEffect {
 }
 
 /**
+ * Applies a saturation adjustment to the buffer using native saturateUniform.
+ * @param strength - 0 = 0% saturation (fully grayscale), 1 = 100% saturation (no change)
+ */
+export function applySaturation(buffer: OptimizedBuffer, strength: number = 1): void {
+  buffer.saturateUniform(strength)
+}
+
+/**
  * Adjusts the overall saturation of the buffer using the native saturate method.
  */
 export class SaturationEffect {
