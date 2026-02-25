@@ -20,37 +20,6 @@ export function applyScanlines(buffer: OptimizedBuffer, strength: number = 0.8, 
 }
 
 /**
- * Converts the buffer colors to grayscale.
- */
-export function applyGrayscale(buffer: OptimizedBuffer): void {
-  const size = buffer.width * buffer.height
-  const fg = buffer.buffers.fg
-  const bg = buffer.buffers.bg
-
-  for (let i = 0; i < size; i++) {
-    const colorIndex = i * 4
-
-    // Grayscale foreground
-    const fgR = fg[colorIndex]
-    const fgG = fg[colorIndex + 1]
-    const fgB = fg[colorIndex + 2]
-    const fgLum = 0.299 * fgR + 0.587 * fgG + 0.114 * fgB
-    fg[colorIndex] = fgLum
-    fg[colorIndex + 1] = fgLum
-    fg[colorIndex + 2] = fgLum
-
-    // Grayscale background
-    const bgR = bg[colorIndex]
-    const bgG = bg[colorIndex + 1]
-    const bgB = bg[colorIndex + 2]
-    const bgLum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB
-    bg[colorIndex] = bgLum
-    bg[colorIndex + 1] = bgLum
-    bg[colorIndex + 2] = bgLum
-  }
-}
-
-/**
  * Applies a sepia tone to the buffer.
  */
 export function applySepia(buffer: OptimizedBuffer): void {
@@ -681,7 +650,7 @@ export class SaturationEffect {
  * Converts the buffer colors to grayscale using native saturateUniform (saturation=0).
  * Much faster than SaturationEffect as it skips triplet creation and iteration.
  */
-export class GrayscaleNativeEffect {
+export class GrayscaleEffect {
   /**
    * Applies the grayscale effect using native saturateUniform.
    */
