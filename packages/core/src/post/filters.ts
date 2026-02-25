@@ -678,6 +678,19 @@ export class SaturationEffect {
 }
 
 /**
+ * Converts the buffer colors to grayscale using native saturateUniform (saturation=0).
+ * Much faster than SaturationEffect as it skips triplet creation and iteration.
+ */
+export class GrayscaleNativeEffect {
+  /**
+   * Applies the grayscale effect using native saturateUniform.
+   */
+  public apply(buffer: OptimizedBuffer): void {
+    buffer.saturateUniform(0)
+  }
+}
+
+/**
  * Applies a simple box blur. (Expensive and may look bad with text).
  */
 export class BlurEffect {

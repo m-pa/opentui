@@ -333,6 +333,13 @@ export class OptimizedBuffer {
     this.lib.bufferSaturate(this.bufferPtr, ptr(triplets), tripletCount, strength)
   }
 
+  public saturateUniform(saturation: number): void {
+    this.guard()
+    // No need to process if saturation is 1 (no change)
+    if (saturation === 1.0) return
+    this.lib.bufferSaturateUniform(this.bufferPtr, saturation)
+  }
+
   public drawText(
     text: string,
     x: number,

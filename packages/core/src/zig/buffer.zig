@@ -607,6 +607,10 @@ pub const OptimizedBuffer = struct {
         buffer_effects.saturate(self, triplets, strength);
     }
 
+    pub fn saturateUniform(self: *OptimizedBuffer, saturation: f32) void {
+        buffer_effects.saturateUniform(self, saturation);
+    }
+
     pub fn getId(self: *const OptimizedBuffer) []const u8 {
         return self.id;
     }

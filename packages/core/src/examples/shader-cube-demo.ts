@@ -31,6 +31,7 @@ import {
   BloomEffect,
   GainEffect,
   SaturationEffect,
+  GrayscaleNativeEffect,
 } from "../post/filters"
 import type { OptimizedBuffer } from "../buffer"
 import { ThreeCliRenderer } from "../3d"
@@ -53,6 +54,7 @@ interface ShaderCubeDemoState {
   blurEffectInstance: BlurEffect
   bloomEffectInstance: BloomEffect
   saturationEffectInstance: SaturationEffect
+  grayscaleNativeEffectInstance: GrayscaleNativeEffect
   filterFunctions: { name: string; func: ((buffer: OptimizedBuffer, deltaTime: number) => void) | null }[]
   currentFilterIndex: number
   time: number
@@ -114,11 +116,13 @@ export async function run(renderer: CliRenderer): Promise<void> {
   const blurEffectInstance = new BlurEffect(1)
   const bloomEffectInstance = new BloomEffect(0.7, 0.3, 2)
   const saturationEffectInstance = new SaturationEffect()
+  const grayscaleNativeEffectInstance = new GrayscaleNativeEffect()
 
   const filterFunctions: { name: string; func: ((buffer: OptimizedBuffer, deltaTime: number) => void) | null }[] = [
     { name: "None", func: null },
     { name: "Scanlines", func: (buf, _dt) => Filters.applyScanlines(buf, 0.85) },
     { name: "Vignette", func: vignetteEffectInstance.apply.bind(vignetteEffectInstance) },
+    { name: "Grayscale (Native)", func: grayscaleNativeEffectInstance.apply.bind(grayscaleNativeEffectInstance) },
     { name: "Grayscale", func: (buf, _dt) => Filters.applyGrayscale(buf) },
     { name: "Sepia", func: (buf, _dt) => Filters.applySepia(buf) },
     { name: "Invert", func: (buf, _dt) => Filters.applyInvert(buf) },
@@ -753,6 +757,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     blurEffectInstance,
     bloomEffectInstance,
     saturationEffectInstance,
+    grayscaleNativeEffectInstance,
     filterFunctions,
     currentFilterIndex,
     time,

@@ -421,6 +421,10 @@ export fn bufferSaturate(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]con
     bufferPtr.saturate(triplets, strength);
 }
 
+export fn bufferSaturateUniform(bufferPtr: *buffer.OptimizedBuffer, saturation: f32) void {
+    bufferPtr.saturateUniform(saturation);
+}
+
 export fn bufferDrawPackedBuffer(bufferPtr: *buffer.OptimizedBuffer, data: [*]const u8, dataLen: usize, posX: u32, posY: u32, terminalWidthCells: u32, terminalHeightCells: u32) void {
     bufferPtr.drawPackedBuffer(data, dataLen, posX, posY, terminalWidthCells, terminalHeightCells);
 }

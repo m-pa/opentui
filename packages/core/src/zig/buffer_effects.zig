@@ -53,6 +53,40 @@ pub fn saturate(self: anytype, triplets: []const f32, strength: f32) void {
     }
 }
 
+/// Apply saturation adjustment uniformly to all pixels in the buffer.
+/// saturation: 0.0 = grayscale, 1.0 = unchanged
+/// This is much faster than saturate() when applying uniform saturation.
+pub fn saturateUniform(self: anytype, saturation: f32) void {
+    if (saturation == 1.0) return;
+
+    const width = self.width;
+    const height = self.height;
+    const size = width * height;
+    const fg = self.buffer.fg;
+    const bg = self.buffer.bg;
+
+    var i: usize = 0;
+    while (i < size) : (i += 1) {
+        // Apply saturation to foreground
+        const fg_r = fg[i][0];
+        const fg_g = fg[i][1];
+        const fg_b = fg[i][2];
+        const fg_lum = 0.299 * fg_r + 0.587 * fg_g + 0.114 * fg_b;
+        fg[i][0] = fg_lum + (fg_r - fg_lum) * saturation;
+        fg[i][1] = fg_lum + (fg_g - fg_lum) * saturation;
+        fg[i][2] = fg_lum + (fg_b - fg_lum) * saturation;
+
+        // Apply saturation to background
+        const bg_r = bg[i][0];
+        const bg_g = bg[i][1];
+        const bg_b = bg[i][2];
+        const bg_lum = 0.299 * bg_r + 0.587 * bg_g + 0.114 * bg_b;
+        bg[i][0] = bg_lum + (bg_r - bg_lum) * saturation;
+        bg[i][1] = bg_lum + (bg_g - bg_lum) * saturation;
+        bg[i][2] = bg_lum + (bg_b - bg_lum) * saturation;
+    }
+}
+
 /// Apply gain to RGB values at specified cell coordinates.
 /// triplets format: [x, y, gain_factor, x, y, gain_factor, ...]
 /// gain_factor can be any f32 value: <1.0 darkens, 1.0 unchanged, >1.0 brightens, negative inverts
