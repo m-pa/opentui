@@ -115,9 +115,22 @@ export async function run(renderer: CliRenderer): Promise<void> {
   const vignetteEffectInstance = new VignetteEffect()
   const brightnessEffectInstance = new BrightnessEffect()
   const gainEffectInstance = new GainEffect()
+  // Create triplets for right half of screen only (for selective saturation)
+  const rightHalfWidth = Math.floor(WIDTH / 2)
+  const rightHalfPixels = rightHalfWidth * HEIGHT
+  const saturationTriplets = new Float32Array(rightHalfPixels * 3)
+  let tripletIndex = 0
+  for (let y = 0; y < HEIGHT; y++) {
+    for (let x = Math.floor(WIDTH / 2); x < WIDTH; x++) {
+      saturationTriplets[tripletIndex++] = x
+      saturationTriplets[tripletIndex++] = y
+      saturationTriplets[tripletIndex++] = 0.5 // 50% saturation for right half
+    }
+  }
+
   const blurEffectInstance = new BlurEffect(1)
   const bloomEffectInstance = new BloomEffect(0.7, 0.3, 2)
-  const saturationEffectInstance = new SaturationEffect()
+  const saturationEffectInstance = new SaturationEffect(1.0, saturationTriplets)
   const grayscaleEffectInstance = new GrayscaleEffect()
 
   // Registry of all available color matrices with their display names

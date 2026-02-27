@@ -590,14 +590,20 @@ export function applyBrightness(buffer: OptimizedBuffer, brightness: number = 1.
 export class SaturationEffect {
   private _saturation: number
   private _cachedSaturation: number
-  // Stores packed triplets [x, y, baseSaturation=1.0] per pixel for uniform saturation
+  // Stores packed triplets [x, y, saturation] per pixel
   private precomputedSaturationTriplets: Float32Array | null = null
   private cachedWidth: number = -1
   private cachedHeight: number = -1
+  // Optional initial triplets to use for selective saturation
+  private initialTriplets: Float32Array | null = null
 
-  constructor(saturation: number = 1.0) {
+  constructor(saturation: number = 1.0, initialTriplets?: Float32Array) {
     this._saturation = Math.max(0, saturation)
     this._cachedSaturation = this._saturation
+    if (initialTriplets) {
+      this.initialTriplets = initialTriplets
+      this.precomputedSaturationTriplets = initialTriplets
+    }
   }
 
   public set saturation(newSaturation: number) {
@@ -609,6 +615,15 @@ export class SaturationEffect {
   }
 
   private _computeFactors(width: number, height: number): void {
+    // If initial triplets provided, use them directly
+    if (this.initialTriplets) {
+      this.precomputedSaturationTriplets = this.initialTriplets
+      this.cachedWidth = width
+      this.cachedHeight = height
+      this._cachedSaturation = this._saturation
+      return
+    }
+
     const pixelsToCompute = width * height
 
     this.precomputedSaturationTriplets = new Float32Array(pixelsToCompute * 3)
@@ -634,12 +649,12 @@ export class SaturationEffect {
     const width = buffer.width
     const height = buffer.height
 
-    // No need to process if saturation is 1 (no change)
-    if (this._saturation === 1.0) {
+    // No need to process if saturation is 1 (no change) and no initial triplets
+    if (this._saturation === 1.0 && !this.initialTriplets) {
       return
     }
 
-    // Recompute base saturation triplets if dimensions changed, saturation changed, or factors haven't been computed yet
+    // Recompute saturation triplets if dimensions changed, saturation changed, or factors haven't been computed yet
     if (
       width !== this.cachedWidth ||
       height !== this.cachedHeight ||
