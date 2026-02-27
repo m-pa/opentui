@@ -164,6 +164,33 @@ pub fn brightness(self: anytype, triplets: []const f32) void {
     }
 }
 
+/// Apply brightness adjustment uniformly to all pixels in the buffer.
+/// brightness_factor: <1.0 darkens, 1.0 unchanged, >1.0 brightens
+/// Values are clamped to [0, 1] range after adjustment.
+/// This is much faster than brightness() when applying uniform brightness.
+pub fn brightnessUniform(self: anytype, brightness_factor: f32) void {
+    if (brightness_factor == 1.0) return;
+
+    const width = self.width;
+    const height = self.height;
+    const size = width * height;
+    const fg = self.buffer.fg;
+    const bg = self.buffer.bg;
+
+    var i: usize = 0;
+    while (i < size) : (i += 1) {
+        // Apply brightness with clamping to [0, 1] for foreground
+        fg[i][0] = @min(1.0, @max(0.0, fg[i][0] * brightness_factor));
+        fg[i][1] = @min(1.0, @max(0.0, fg[i][1] * brightness_factor));
+        fg[i][2] = @min(1.0, @max(0.0, fg[i][2] * brightness_factor));
+
+        // Apply brightness with clamping to [0, 1] for background
+        bg[i][0] = @min(1.0, @max(0.0, bg[i][0] * brightness_factor));
+        bg[i][1] = @min(1.0, @max(0.0, bg[i][1] * brightness_factor));
+        bg[i][2] = @min(1.0, @max(0.0, bg[i][2] * brightness_factor));
+    }
+}
+
 /// Attenuate (dim) RGB values at specified cell coordinates.
 /// triplets format: [x, y, attenuation, x, y, attenuation, ...]
 /// attenuation: 0.0 = unchanged, 1.0 = black

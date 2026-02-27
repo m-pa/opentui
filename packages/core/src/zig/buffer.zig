@@ -603,6 +603,10 @@ pub const OptimizedBuffer = struct {
         buffer_effects.brightness(self, triplets);
     }
 
+    pub fn brightnessUniform(self: *OptimizedBuffer, brightness_factor: f32) void {
+        buffer_effects.brightnessUniform(self, brightness_factor);
+    }
+
     pub fn attenuate(self: *OptimizedBuffer, triplets: []const f32, strength: f32) void {
         buffer_effects.attenuate(self, triplets, strength);
     }

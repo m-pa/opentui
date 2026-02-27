@@ -421,6 +421,10 @@ export fn bufferBrightness(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]c
     bufferPtr.brightness(triplets);
 }
 
+export fn bufferBrightnessUniform(bufferPtr: *buffer.OptimizedBuffer, brightness: f32) void {
+    bufferPtr.brightnessUniform(brightness);
+}
+
 export fn bufferSaturate(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]const f32, tripletCount: usize, strength: f32) void {
     if (tripletCount == 0) return;
     const len = tripletCount * 3;

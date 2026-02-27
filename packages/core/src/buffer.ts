@@ -333,6 +333,13 @@ export class OptimizedBuffer {
     this.lib.bufferBrightness(this.bufferPtr, ptr(triplets), tripletCount)
   }
 
+  public brightnessUniform(brightness: number): void {
+    this.guard()
+    // No need to process if brightness is 1 (no change)
+    if (brightness === 1.0) return
+    this.lib.bufferBrightnessUniform(this.bufferPtr, brightness)
+  }
+
   public saturate(cells: Array<[number, number, number]> | Float32Array, strength: number = 1): void {
     this.guard()
     if (strength === 1.0 || cells.length === 0) return

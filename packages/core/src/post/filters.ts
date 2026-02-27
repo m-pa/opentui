@@ -403,21 +403,16 @@ export class DistortionEffect {
 
 /**
  * Applies a vignette effect by darkening the corners, optimized with precomputation.
- * Supports arbitrary region application.
  */
 export class VignetteEffect {
   private _strength: number
-  private _region: EffectRegion | null
-  private _cachedRegion: EffectRegion | null
   // Stores packed triplets [x, y, baseAttenuation] per pixel
   private precomputedAttenuationTriplets: Float32Array | null = null
   private cachedWidth: number = -1
   private cachedHeight: number = -1
 
-  constructor(strength: number = 0.5, region?: EffectRegion | null) {
+  constructor(strength: number = 0.5) {
     this._strength = strength
-    this._region = region ?? null
-    this._cachedRegion = this._region
   }
 
   public set strength(newStrength: number) {
@@ -428,53 +423,18 @@ export class VignetteEffect {
     return this._strength
   }
 
-  public get region(): EffectRegion | null {
-    return this._region
-  }
-
-  public setRegion(region: EffectRegion | null): void {
-    this._region = region
-  }
-
-  public clearRegion(): void {
-    this._region = null
-  }
-
-  private _regionsEqual(a: EffectRegion | null, b: EffectRegion | null): boolean {
-    if (a === null && b === null) return true
-    if (a === null || b === null) return false
-    return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
-  }
-
   private _computeFactors(width: number, height: number): void {
+    this.precomputedAttenuationTriplets = new Float32Array(width * height * 3)
     const centerX = width / 2
     const centerY = height / 2
     const maxDistSq = centerX * centerX + centerY * centerY
     const safeMaxDistSq = maxDistSq === 0 ? 1 : maxDistSq // Avoid division by zero
-
-    let startX = 0
-    let startY = 0
-    let endX = width
-    let endY = height
-
-    if (this._region) {
-      startX = Math.max(0, Math.min(width, this._region.x))
-      startY = Math.max(0, Math.min(height, this._region.y))
-      endX = Math.max(0, Math.min(width, this._region.x + this._region.width))
-      endY = Math.max(0, Math.min(height, this._region.y + this._region.height))
-    }
-
-    const regionWidth = endX - startX
-    const regionHeight = endY - startY
-    const pixelsToCompute = regionWidth * regionHeight
-
-    this.precomputedAttenuationTriplets = new Float32Array(pixelsToCompute * 3)
     let i = 0
 
-    for (let y = startY; y < endY; y++) {
+    for (let y = 0; y < height; y++) {
       const dy = y - centerY
       const dySq = dy * dy
-      for (let x = startX; x < endX; x++) {
+      for (let x = 0; x < width; x++) {
         const dx = x - centerX
         const distSq = dx * dx + dySq
         // Calculate base attenuation (0 to 1 based on distance)
@@ -484,10 +444,8 @@ export class VignetteEffect {
         this.precomputedAttenuationTriplets[i++] = baseAttenuation
       }
     }
-
     this.cachedWidth = width
     this.cachedHeight = height
-    this._cachedRegion = this._region
   }
 
   /**
@@ -497,13 +455,8 @@ export class VignetteEffect {
     const width = buffer.width
     const height = buffer.height
 
-    // Recompute base attenuation if dimensions changed, region changed, or factors haven't been computed yet
-    if (
-      width !== this.cachedWidth ||
-      height !== this.cachedHeight ||
-      !this._regionsEqual(this._region, this._cachedRegion) ||
-      !this.precomputedAttenuationTriplets
-    ) {
+    // Recompute base attenuation if dimensions changed or factors haven't been computed yet
+    if (width !== this.cachedWidth || height !== this.cachedHeight || !this.precomputedAttenuationTriplets) {
       this._computeFactors(width, height)
     }
 
@@ -744,6 +697,15 @@ export class GainEffect {
  */
 export function applySaturation(buffer: OptimizedBuffer, strength: number = 1): void {
   buffer.saturateUniform(strength)
+}
+
+/**
+ * Applies a brightness adjustment to the buffer using native brightnessUniform.
+ * @param brightness - brightness factor: <1.0 darkens, 1.0 unchanged, >1.0 brightens
+ * This is much faster than BrightnessEffect when applying uniform brightness to the whole screen.
+ */
+export function applyBrightness(buffer: OptimizedBuffer, brightness: number = 1.0): void {
+  buffer.brightnessUniform(brightness)
 }
 
 /**
