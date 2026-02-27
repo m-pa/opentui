@@ -20,38 +20,176 @@ export function applyScanlines(buffer: OptimizedBuffer, strength: number = 0.8, 
 }
 
 /**
- * Applies a sepia tone to the buffer.
+ * Applies a sepia tone to the buffer using native color matrix transformation.
+ * This uses Zig-accelerated native code for optimal performance.
  */
 export function applySepia(buffer: OptimizedBuffer): void {
-  const size = buffer.width * buffer.height
-  const fg = buffer.buffers.fg
-  const bg = buffer.buffers.bg
+  // Standard sepia transformation matrix
+  const sepiaMatrix = new Float32Array([
+    0.393,
+    0.769,
+    0.189, // Red output
+    0.349,
+    0.686,
+    0.168, // Green output
+    0.272,
+    0.534,
+    0.131, // Blue output
+  ])
 
-  for (let i = 0; i < size; i++) {
-    const colorIndex = i * 4
+  buffer.colorMatrixUniform(sepiaMatrix, 1.0)
+}
 
-    // Sepia foreground
-    let fgR = fg[colorIndex]
-    let fgG = fg[colorIndex + 1]
-    let fgB = fg[colorIndex + 2]
-    let newFgR = Math.min(1.0, fgR * 0.393 + fgG * 0.769 + fgB * 0.189)
-    let newFgG = Math.min(1.0, fgR * 0.349 + fgG * 0.686 + fgB * 0.168)
-    let newFgB = Math.min(1.0, fgR * 0.272 + fgG * 0.534 + fgB * 0.131)
-    fg[colorIndex] = newFgR
-    fg[colorIndex + 1] = newFgG
-    fg[colorIndex + 2] = newFgB
+/**
+ * Colorblindness simulation and compensation filters using color matrix transformations.
+ * These use native Zig-accelerated code for optimal performance.
+ */
 
-    // Sepia background
-    let bgR = bg[colorIndex]
-    let bgG = bg[colorIndex + 1]
-    let bgB = bg[colorIndex + 2]
-    let newBgR = Math.min(1.0, bgR * 0.393 + bgG * 0.769 + bgB * 0.189)
-    let newBgG = Math.min(1.0, bgR * 0.349 + bgG * 0.686 + bgB * 0.168)
-    let newBgB = Math.min(1.0, bgR * 0.272 + bgG * 0.534 + bgB * 0.131)
-    bg[colorIndex] = newBgR
-    bg[colorIndex + 1] = newBgG
-    bg[colorIndex + 2] = newBgB
-  }
+// Protanopia (Red-blind) simulation matrix - shows how colors appear to someone with red-blindness
+const PROTANOPIA_SIM_MATRIX = new Float32Array([
+  0.567,
+  0.433,
+  0.0, // Red output
+  0.558,
+  0.442,
+  0.0, // Green output
+  0.0,
+  0.242,
+  0.758, // Blue output
+])
+
+// Deuteranopia (Green-blind) simulation matrix - shows how colors appear to someone with green-blindness
+const DEUTERANOPIA_SIM_MATRIX = new Float32Array([
+  0.625,
+  0.375,
+  0.0, // Red output
+  0.7,
+  0.3,
+  0.0, // Green output
+  0.0,
+  0.3,
+  0.7, // Blue output
+])
+
+// Tritanopia (Blue-blind) simulation matrix - shows how colors appear to someone with blue-blindness
+const TRITANOPIA_SIM_MATRIX = new Float32Array([
+  0.95,
+  0.05,
+  0.0, // Red output
+  0.0,
+  0.433,
+  0.567, // Green output
+  0.0,
+  0.475,
+  0.525, // Blue output
+])
+
+// Achromatopsia (Complete color blindness) - grayscale
+const ACHROMATOPSIA_MATRIX = new Float32Array([
+  0.299,
+  0.587,
+  0.114, // Red output (luminance)
+  0.299,
+  0.587,
+  0.114, // Green output (luminance)
+  0.299,
+  0.587,
+  0.114, // Blue output (luminance)
+])
+
+// Protanopia compensation matrix - shifts colors to make them more distinguishable
+const PROTANOPIA_COMP_MATRIX = new Float32Array([
+  1.0,
+  0.2,
+  0.0, // Boost red channel
+  0.0,
+  0.9,
+  0.1, // Adjust green
+  0.0,
+  0.1,
+  0.9, // Enhance blue
+])
+
+// Deuteranopia compensation matrix - shifts colors to make them more distinguishable
+const DEUTERANOPIA_COMP_MATRIX = new Float32Array([
+  0.9,
+  0.1,
+  0.0, // Adjust red
+  0.2,
+  0.8,
+  0.0, // Boost green channel
+  0.0,
+  0.0,
+  1.0, // Keep blue
+])
+
+// Tritanopia compensation matrix - shifts colors to make them more distinguishable
+const TRITANOPIA_COMP_MATRIX = new Float32Array([
+  1.0,
+  0.0,
+  0.0, // Keep red
+  0.0,
+  0.9,
+  0.1, // Adjust green
+  0.1,
+  0.0,
+  0.9, // Boost blue channel
+])
+
+/**
+ * Simulates Protanopia (red-blind colorblindness).
+ * Shows how the scene appears to someone who cannot perceive red light.
+ */
+export function applyProtanopiaSimulation(buffer: OptimizedBuffer): void {
+  buffer.colorMatrixUniform(PROTANOPIA_SIM_MATRIX, 1.0)
+}
+
+/**
+ * Simulates Deuteranopia (green-blind colorblindness).
+ * Shows how the scene appears to someone who cannot perceive green light.
+ */
+export function applyDeuteranopiaSimulation(buffer: OptimizedBuffer): void {
+  buffer.colorMatrixUniform(DEUTERANOPIA_SIM_MATRIX, 1.0)
+}
+
+/**
+ * Simulates Tritanopia (blue-blind colorblindness).
+ * Shows how the scene appears to someone who cannot perceive blue light.
+ */
+export function applyTritanopiaSimulation(buffer: OptimizedBuffer): void {
+  buffer.colorMatrixUniform(TRITANOPIA_SIM_MATRIX, 1.0)
+}
+
+/**
+ * Simulates complete color blindness (achromatopsia).
+ * Converts the scene to grayscale based on luminance.
+ */
+export function applyAchromatopsiaSimulation(buffer: OptimizedBuffer): void {
+  buffer.colorMatrixUniform(ACHROMATOPSIA_MATRIX, 1.0)
+}
+
+/**
+ * Applies Protanopia compensation filter.
+ * Adjusts colors to make them more distinguishable for someone with red-blindness.
+ */
+export function applyProtanopiaCompensation(buffer: OptimizedBuffer): void {
+  buffer.colorMatrixUniform(PROTANOPIA_COMP_MATRIX, 1.0)
+}
+
+/**
+ * Applies Deuteranopia compensation filter.
+ * Adjusts colors to make them more distinguishable for someone with green-blindness.
+ */
+export function applyDeuteranopiaCompensation(buffer: OptimizedBuffer): void {
+  buffer.colorMatrixUniform(DEUTERANOPIA_COMP_MATRIX, 1.0)
+}
+
+/**
+ * Applies Tritanopia compensation filter.
+ * Adjusts colors to make them more distinguishable for someone with blue-blindness.
+ */
+export function applyTritanopiaCompensation(buffer: OptimizedBuffer): void {
+  buffer.colorMatrixUniform(TRITANOPIA_COMP_MATRIX, 1.0)
 }
 
 /**

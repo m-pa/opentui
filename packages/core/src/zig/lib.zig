@@ -436,6 +436,19 @@ export fn bufferSaturateUniform(bufferPtr: *buffer.OptimizedBuffer, saturation: 
     bufferPtr.saturateUniform(saturation);
 }
 
+export fn bufferColorMatrix(bufferPtr: *buffer.OptimizedBuffer, matrixPtr: [*]const f32, tripletsPtr: [*]const f32, tripletCount: usize) void {
+    if (tripletCount == 0) return;
+    const matrix = matrixPtr[0..9];
+    const len = tripletCount * 3;
+    const triplets = tripletsPtr[0..len];
+    bufferPtr.colorMatrix(matrix, triplets);
+}
+
+export fn bufferColorMatrixUniform(bufferPtr: *buffer.OptimizedBuffer, matrixPtr: [*]const f32, strength: f32) void {
+    const matrix = matrixPtr[0..9];
+    bufferPtr.colorMatrixUniform(matrix, strength);
+}
+
 export fn bufferDrawPackedBuffer(bufferPtr: *buffer.OptimizedBuffer, data: [*]const u8, dataLen: usize, posX: u32, posY: u32, terminalWidthCells: u32, terminalHeightCells: u32) void {
     bufferPtr.drawPackedBuffer(data, dataLen, posX, posY, terminalWidthCells, terminalHeightCells);
 }

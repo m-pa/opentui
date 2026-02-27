@@ -619,6 +619,14 @@ pub const OptimizedBuffer = struct {
         buffer_effects.saturateUniform(self, saturation);
     }
 
+    pub fn colorMatrix(self: *OptimizedBuffer, matrix: []const f32, triplets: []const f32) void {
+        buffer_effects.colorMatrix(self, matrix, triplets);
+    }
+
+    pub fn colorMatrixUniform(self: *OptimizedBuffer, matrix: []const f32, strength: f32) void {
+        buffer_effects.colorMatrixUniform(self, matrix, strength);
+    }
+
     pub fn getId(self: *const OptimizedBuffer) []const u8 {
         return self.id;
     }

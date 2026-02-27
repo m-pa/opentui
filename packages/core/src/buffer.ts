@@ -378,6 +378,55 @@ export class OptimizedBuffer {
     this.lib.bufferSaturateUniform(this.bufferPtr, saturation)
   }
 
+  /**
+   * Apply a 3x3 color matrix transformation to the buffer.
+   * @param matrix - 9 values representing a 3x3 matrix in row-major order [m00, m01, m02, m10, m11, m12, m20, m21, m22]
+   * @param triplets - Array of [x, y, strength] triplets for per-pixel application
+   * @param strength - Optional global strength multiplier (defaults to 1.0)
+   */
+  public colorMatrix(matrix: number[] | Float32Array, triplets: number[] | Float32Array, strength: number = 1.0): void {
+    this.guard()
+    const matrixArray = matrix instanceof Float32Array ? matrix : new Float32Array(matrix)
+    if (matrixArray.length !== 9) {
+      throw new Error("Color matrix must be a 3x3 matrix (9 values)")
+    }
+
+    let tripletsArray: Float32Array
+    if (triplets instanceof Float32Array) {
+      tripletsArray = triplets
+    } else {
+      if (triplets.length === 0 || triplets.length % 3 !== 0) {
+        throw new Error("Triplets must be an array of [x, y, strength] values")
+      }
+      tripletsArray = new Float32Array(triplets)
+    }
+
+    // Apply strength to each triplet
+    if (strength !== 1.0) {
+      for (let i = 2; i < tripletsArray.length; i += 3) {
+        tripletsArray[i] *= strength
+      }
+    }
+
+    const tripletCount = Math.floor(tripletsArray.length / 3)
+    this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrixArray), ptr(tripletsArray), tripletCount)
+  }
+
+  /**
+   * Apply a 3x3 color matrix transformation uniformly to the entire buffer.
+   * @param matrix - 9 values representing a 3x3 matrix in row-major order [m00, m01, m02, m10, m11, m12, m20, m21, m22]
+   * @param strength - Optional strength multiplier (0.0 = no effect, 1.0 = full matrix, defaults to 1.0)
+   */
+  public colorMatrixUniform(matrix: number[] | Float32Array, strength: number = 1.0): void {
+    this.guard()
+    const matrixArray = matrix instanceof Float32Array ? matrix : new Float32Array(matrix)
+    if (matrixArray.length !== 9) {
+      throw new Error("Color matrix must be a 3x3 matrix (9 values)")
+    }
+    if (strength === 0.0) return
+    this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrixArray), strength)
+  }
+
   public drawText(
     text: string,
     x: number,

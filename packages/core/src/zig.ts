@@ -278,6 +278,14 @@ function getOpenTUILib(libPath?: string) {
       args: ["ptr", "f32"],
       returns: "void",
     },
+    bufferColorMatrix: {
+      args: ["ptr", "ptr", "ptr", "usize"],
+      returns: "void",
+    },
+    bufferColorMatrixUniform: {
+      args: ["ptr", "ptr", "f32"],
+      returns: "void",
+    },
     bufferResize: {
       args: ["ptr", "u32", "u32"],
       returns: "void",
@@ -1465,6 +1473,8 @@ export interface RenderLib {
   bufferBrightnessUniform: (buffer: Pointer, brightness: number) => void
   bufferSaturate: (buffer: Pointer, tripletsPtr: Pointer, tripletCount: number, strength: number) => void
   bufferSaturateUniform: (buffer: Pointer, saturation: number) => void
+  bufferColorMatrix: (buffer: Pointer, matrixPtr: Pointer, tripletsPtr: Pointer, tripletCount: number) => void
+  bufferColorMatrixUniform: (buffer: Pointer, matrixPtr: Pointer, strength: number) => void
   bufferDrawSuperSampleBuffer: (
     buffer: Pointer,
     x: number,
@@ -2215,6 +2225,14 @@ class FFIRenderLib implements RenderLib {
 
   public bufferSaturateUniform(buffer: Pointer, saturation: number): void {
     this.opentui.symbols.bufferSaturateUniform(buffer, saturation)
+  }
+
+  public bufferColorMatrix(buffer: Pointer, matrixPtr: Pointer, tripletsPtr: Pointer, tripletCount: number): void {
+    this.opentui.symbols.bufferColorMatrix(buffer, matrixPtr, tripletsPtr, tripletCount)
+  }
+
+  public bufferColorMatrixUniform(buffer: Pointer, matrixPtr: Pointer, strength: number): void {
+    this.opentui.symbols.bufferColorMatrixUniform(buffer, matrixPtr, strength)
   }
 
   public bufferDrawSuperSampleBuffer(

@@ -136,6 +136,15 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Gain", func: gainEffectInstance.apply.bind(gainEffectInstance) },
     { name: "Saturation", func: saturationEffectInstance.apply.bind(saturationEffectInstance) },
     { name: "Saturation (Uniform)", func: (buf, _dt) => Filters.applySaturation(buf, 0.5) },
+    // Colorblindness simulation filters
+    { name: "Protanopia (Sim)", func: (buf, _dt) => Filters.applyProtanopiaSimulation(buf) },
+    { name: "Deuteranopia (Sim)", func: (buf, _dt) => Filters.applyDeuteranopiaSimulation(buf) },
+    { name: "Tritanopia (Sim)", func: (buf, _dt) => Filters.applyTritanopiaSimulation(buf) },
+    { name: "Achromatopsia (Sim)", func: (buf, _dt) => Filters.applyAchromatopsiaSimulation(buf) },
+    // Colorblindness compensation filters
+    { name: "Protanopia (Comp)", func: (buf, _dt) => Filters.applyProtanopiaCompensation(buf) },
+    { name: "Deuteranopia (Comp)", func: (buf, _dt) => Filters.applyDeuteranopiaCompensation(buf) },
+    { name: "Tritanopia (Comp)", func: (buf, _dt) => Filters.applyTritanopiaCompensation(buf) },
   ]
 
   // Box in the background to show alpha channel works
