@@ -128,6 +128,24 @@ export async function run(renderer: CliRenderer): Promise<void> {
     }
   }
 
+  // Helper function to create full-screen triplets
+  function createFullScreenTriplets(width: number, height: number): Float32Array {
+    const fullScreenPixels = width * height
+    const triplets = new Float32Array(fullScreenPixels * 3)
+    let i = 0
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        triplets[i++] = x
+        triplets[i++] = y
+        triplets[i++] = 0.5 // 50% saturation for full screen
+      }
+    }
+    return triplets
+  }
+
+  // Full screen saturation mode toggle
+  let saturationFullScreen = false
+
   const blurEffectInstance = new BlurEffect(1)
   const bloomEffectInstance = new BloomEffect(0.7, 0.3, 2)
   const saturationEffectInstance = new SaturationEffect(1.0, saturationTriplets)
@@ -440,7 +458,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
   const controlsText = new TextRenderable(renderer, {
     id: "shader-controls",
     content:
-      "WASD: Move | QE: Rotate | ZX: Zoom | V: Light Viz | C: Light Color | L: Lights | M/N: Material | P/B/I: Maps | R: Reset | Space: Rotation | J/K Filter | [/]{/} Params",
+      "WASD: Move | QE: Rotate | ZX: Zoom | V: Light Viz | C: Light Color | L: Lights | M/N: Material | P/B/I: Maps | R: Reset | Space: Rotation | J/K Filter | [/]{/} Params | T: Saturation Mode",
     position: "absolute",
     left: 0,
     top: HEIGHT - 2,
@@ -480,7 +498,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
         param1Visible = true
         break
       case "Saturation":
-        param1Text = `Saturation: ${saturationEffectInstance.saturation.toFixed(2)} ([/])`
+        param1Text = `Saturation: ${saturationEffectInstance.saturation.toFixed(2)} (T: ${saturationFullScreen ? "Full" : "Half"}) ([/])`
         param1Visible = true
         break
       case "Color Matrix":
@@ -626,6 +644,18 @@ export async function run(renderer: CliRenderer): Promise<void> {
       }
       filterStatusText.content = `Filter: ${selectedFilter.name} (J/K to cycle)`
       updateParameterUI()
+    }
+
+    // Toggle saturation mode between half-screen and full-screen
+    if (key.name === "t" && filterFunctions[currentFilterIndex].name === "Saturation") {
+      saturationFullScreen = !saturationFullScreen
+      if (saturationFullScreen) {
+        const fullScreenTriplets = createFullScreenTriplets(renderer.terminalWidth, renderer.terminalHeight)
+        saturationEffectInstance.setTriplets(fullScreenTriplets)
+      } else {
+        saturationEffectInstance.setTriplets(saturationTriplets)
+      }
+      paramChanged = true
     }
 
     // Parameter Adjustment Keys ([ / ] and { / })

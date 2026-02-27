@@ -614,6 +614,26 @@ export class SaturationEffect {
     return this._saturation
   }
 
+  /**
+   * Sets new triplets for selective saturation and marks cached data as stale.
+   * This allows transforming the effect area at runtime.
+   */
+  public setTriplets(triplets: Float32Array | null): void {
+    this.initialTriplets = triplets
+    this.precomputedSaturationTriplets = triplets
+    // Invalidate cache to force recompute on next apply
+    this.cachedWidth = -1
+    this.cachedHeight = -1
+    this._cachedSaturation = -1
+  }
+
+  /**
+   * Gets the current triplets, if any.
+   */
+  public getTriplets(): Float32Array | null {
+    return this.initialTriplets
+  }
+
   private _computeFactors(width: number, height: number): void {
     // If initial triplets provided, use them directly
     if (this.initialTriplets) {
