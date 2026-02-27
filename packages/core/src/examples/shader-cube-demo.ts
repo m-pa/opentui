@@ -34,6 +34,16 @@ import {
   GrayscaleEffect,
   type EffectRegion,
 } from "../post/filters"
+import {
+  PROTANOPIA_SIM_MATRIX,
+  DEUTERANOPIA_SIM_MATRIX,
+  TRITANOPIA_SIM_MATRIX,
+  ACHROMATOPSIA_MATRIX,
+  PROTANOPIA_COMP_MATRIX,
+  DEUTERANOPIA_COMP_MATRIX,
+  TRITANOPIA_COMP_MATRIX,
+  SEPIA_MATRIX,
+} from "../post/matrices"
 import type { OptimizedBuffer } from "../buffer"
 import { ThreeCliRenderer } from "../3d"
 
@@ -124,7 +134,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Scanlines", func: (buf, _dt) => Filters.applyScanlines(buf, 0.85) },
     { name: "Vignette", func: vignetteEffectInstance.apply.bind(vignetteEffectInstance) },
     { name: "Grayscale", func: grayscaleEffectInstance.apply.bind(grayscaleEffectInstance) },
-    { name: "Sepia", func: (buf, _dt) => Filters.applySepia(buf) },
+    { name: "Sepia", func: (buf, _dt) => buf.colorMatrixUniform(SEPIA_MATRIX, 1.0) },
     { name: "Invert", func: (buf, _dt) => Filters.applyInvert(buf) },
     { name: "Noise", func: (buf, _dt) => Filters.applyNoise(buf, 0.05) },
     { name: "Blur", func: blurEffectInstance.apply.bind(blurEffectInstance) },
@@ -137,14 +147,14 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Saturation", func: saturationEffectInstance.apply.bind(saturationEffectInstance) },
     { name: "Saturation (Uniform)", func: (buf, _dt) => Filters.applySaturation(buf, 0.5) },
     // Colorblindness simulation filters
-    { name: "Protanopia (Sim)", func: (buf, _dt) => Filters.applyProtanopiaSimulation(buf) },
-    { name: "Deuteranopia (Sim)", func: (buf, _dt) => Filters.applyDeuteranopiaSimulation(buf) },
-    { name: "Tritanopia (Sim)", func: (buf, _dt) => Filters.applyTritanopiaSimulation(buf) },
-    { name: "Achromatopsia (Sim)", func: (buf, _dt) => Filters.applyAchromatopsiaSimulation(buf) },
+    { name: "Protanopia (Sim)", func: (buf, _dt) => buf.colorMatrixUniform(PROTANOPIA_SIM_MATRIX, 1.0) },
+    { name: "Deuteranopia (Sim)", func: (buf, _dt) => buf.colorMatrixUniform(DEUTERANOPIA_SIM_MATRIX, 1.0) },
+    { name: "Tritanopia (Sim)", func: (buf, _dt) => buf.colorMatrixUniform(TRITANOPIA_SIM_MATRIX, 1.0) },
+    { name: "Achromatopsia (Sim)", func: (buf, _dt) => buf.colorMatrixUniform(ACHROMATOPSIA_MATRIX, 1.0) },
     // Colorblindness compensation filters
-    { name: "Protanopia (Comp)", func: (buf, _dt) => Filters.applyProtanopiaCompensation(buf) },
-    { name: "Deuteranopia (Comp)", func: (buf, _dt) => Filters.applyDeuteranopiaCompensation(buf) },
-    { name: "Tritanopia (Comp)", func: (buf, _dt) => Filters.applyTritanopiaCompensation(buf) },
+    { name: "Protanopia (Comp)", func: (buf, _dt) => buf.colorMatrixUniform(PROTANOPIA_COMP_MATRIX, 1.0) },
+    { name: "Deuteranopia (Comp)", func: (buf, _dt) => buf.colorMatrixUniform(DEUTERANOPIA_COMP_MATRIX, 1.0) },
+    { name: "Tritanopia (Comp)", func: (buf, _dt) => buf.colorMatrixUniform(TRITANOPIA_COMP_MATRIX, 1.0) },
   ]
 
   // Box in the background to show alpha channel works
