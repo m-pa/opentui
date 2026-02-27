@@ -34,16 +34,7 @@ import {
   GrayscaleEffect,
   type EffectRegion,
 } from "../post/filters"
-import {
-  PROTANOPIA_SIM_MATRIX,
-  DEUTERANOPIA_SIM_MATRIX,
-  TRITANOPIA_SIM_MATRIX,
-  ACHROMATOPSIA_MATRIX,
-  PROTANOPIA_COMP_MATRIX,
-  DEUTERANOPIA_COMP_MATRIX,
-  TRITANOPIA_COMP_MATRIX,
-  SEPIA_MATRIX,
-} from "../post/matrices"
+import * as Matrices from "../post/matrices"
 import type { OptimizedBuffer } from "../buffer"
 import { ThreeCliRenderer } from "../3d"
 
@@ -66,6 +57,7 @@ interface ShaderCubeDemoState {
   bloomEffectInstance: BloomEffect
   saturationEffectInstance: SaturationEffect
   grayscaleEffectInstance: GrayscaleEffect
+  colorMatrixEffectInstance: ColorMatrixEffect
   filterFunctions: { name: string; func: ((buffer: OptimizedBuffer, deltaTime: number) => void) | null }[]
   currentFilterIndex: number
   time: number
@@ -129,12 +121,48 @@ export async function run(renderer: CliRenderer): Promise<void> {
   const saturationEffectInstance = new SaturationEffect()
   const grayscaleEffectInstance = new GrayscaleEffect()
 
+  // Registry of all available color matrices with their display names
+  const colorMatrixRegistry: { name: string; matrix: Float32Array }[] = [
+    { name: "Sepia", matrix: Matrices.SEPIA_MATRIX },
+    { name: "Protanopia Sim", matrix: Matrices.PROTANOPIA_SIM_MATRIX },
+    { name: "Deuteranopia Sim", matrix: Matrices.DEUTERANOPIA_SIM_MATRIX },
+    { name: "Tritanopia Sim", matrix: Matrices.TRITANOPIA_SIM_MATRIX },
+    { name: "Achromatopsia", matrix: Matrices.ACHROMATOPSIA_MATRIX },
+    { name: "Protanopia Comp", matrix: Matrices.PROTANOPIA_COMP_MATRIX },
+    { name: "Deuteranopia Comp", matrix: Matrices.DEUTERANOPIA_COMP_MATRIX },
+    { name: "Tritanopia Comp", matrix: Matrices.TRITANOPIA_COMP_MATRIX },
+  ]
+
+  // ColorMatrix effect that can cycle through all matrices
+  class ColorMatrixEffect {
+    private currentIndex = 0
+
+    public get currentMatrixName(): string {
+      return colorMatrixRegistry[this.currentIndex].name
+    }
+
+    public apply(buffer: OptimizedBuffer): void {
+      const { matrix } = colorMatrixRegistry[this.currentIndex]
+      buffer.colorMatrixUniform(matrix, 1.0)
+    }
+
+    public nextMatrix(): void {
+      this.currentIndex = (this.currentIndex + 1) % colorMatrixRegistry.length
+    }
+
+    public previousMatrix(): void {
+      this.currentIndex = (this.currentIndex - 1 + colorMatrixRegistry.length) % colorMatrixRegistry.length
+    }
+  }
+
+  const colorMatrixEffectInstance = new ColorMatrixEffect()
+
   const filterFunctions: { name: string; func: ((buffer: OptimizedBuffer, deltaTime: number) => void) | null }[] = [
     { name: "None", func: null },
     { name: "Scanlines", func: (buf, _dt) => Filters.applyScanlines(buf, 0.85) },
     { name: "Vignette", func: vignetteEffectInstance.apply.bind(vignetteEffectInstance) },
     { name: "Grayscale", func: grayscaleEffectInstance.apply.bind(grayscaleEffectInstance) },
-    { name: "Sepia", func: (buf, _dt) => buf.colorMatrixUniform(SEPIA_MATRIX, 1.0) },
+    { name: "Color Matrix", func: colorMatrixEffectInstance.apply.bind(colorMatrixEffectInstance) },
     { name: "Invert", func: (buf, _dt) => Filters.applyInvert(buf) },
     { name: "Noise", func: (buf, _dt) => Filters.applyNoise(buf, 0.05) },
     { name: "Blur", func: blurEffectInstance.apply.bind(blurEffectInstance) },
@@ -146,15 +174,6 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Gain", func: gainEffectInstance.apply.bind(gainEffectInstance) },
     { name: "Saturation", func: saturationEffectInstance.apply.bind(saturationEffectInstance) },
     { name: "Saturation (Uniform)", func: (buf, _dt) => Filters.applySaturation(buf, 0.5) },
-    // Colorblindness simulation filters
-    { name: "Protanopia (Sim)", func: (buf, _dt) => buf.colorMatrixUniform(PROTANOPIA_SIM_MATRIX, 1.0) },
-    { name: "Deuteranopia (Sim)", func: (buf, _dt) => buf.colorMatrixUniform(DEUTERANOPIA_SIM_MATRIX, 1.0) },
-    { name: "Tritanopia (Sim)", func: (buf, _dt) => buf.colorMatrixUniform(TRITANOPIA_SIM_MATRIX, 1.0) },
-    { name: "Achromatopsia (Sim)", func: (buf, _dt) => buf.colorMatrixUniform(ACHROMATOPSIA_MATRIX, 1.0) },
-    // Colorblindness compensation filters
-    { name: "Protanopia (Comp)", func: (buf, _dt) => buf.colorMatrixUniform(PROTANOPIA_COMP_MATRIX, 1.0) },
-    { name: "Deuteranopia (Comp)", func: (buf, _dt) => buf.colorMatrixUniform(DEUTERANOPIA_COMP_MATRIX, 1.0) },
-    { name: "Tritanopia (Comp)", func: (buf, _dt) => buf.colorMatrixUniform(TRITANOPIA_COMP_MATRIX, 1.0) },
   ]
 
   // Box in the background to show alpha channel works
@@ -473,6 +492,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
         param1Visible = true
         param2Visible = true
         break
+      case "Color Matrix":
+        param1Text = `Matrix: ${colorMatrixEffectInstance.currentMatrixName} ([/] to cycle)`
+        param1Visible = true
+        break
     }
 
     param1StatusText.content = param1Text
@@ -696,6 +719,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           saturationEffectInstance.saturation = Math.max(0, saturationEffectInstance.saturation - 0.05)
           paramChanged = true
           break
+        case "Color Matrix":
+          colorMatrixEffectInstance.previousMatrix()
+          paramChanged = true
+          break
       }
     } else if (key.name === "]") {
       switch (currentFilterName) {
@@ -728,6 +755,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           break
         case "Saturation":
           saturationEffectInstance.saturation = Math.min(10, saturationEffectInstance.saturation + 0.05)
+          paramChanged = true
+          break
+        case "Color Matrix":
+          colorMatrixEffectInstance.nextMatrix()
           paramChanged = true
           break
       }
@@ -844,6 +875,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     bloomEffectInstance,
     saturationEffectInstance,
     grayscaleEffectInstance,
+    colorMatrixEffectInstance,
     filterFunctions,
     currentFilterIndex,
     time,
