@@ -386,7 +386,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
   const controlsText = new TextRenderable(renderer, {
     id: "shader-controls",
     content:
-      "WASD: Move | QE: Rotate | ZX: Zoom | V: Light Viz | C: Light Color | L: Lights | M/N: Material | P/B/I: Maps | R: Reset | Space: Rotation | J/K Filter | [/]{/} Param Adjust",
+      "WASD: Move | QE: Rotate | ZX: Zoom | V: Light Viz | C: Light Color | L: Lights | M/N: Material | P/B/I: Maps | R: Reset | Space: Rotation | J/K Filter | [/]{/} Params | H: Bright Region",
     position: "absolute",
     left: 0,
     top: HEIGHT - 2,
@@ -415,7 +415,9 @@ export async function run(renderer: CliRenderer): Promise<void> {
         break
       case "Brightness":
         param1Text = `Brightness Factor: ${brightnessEffectInstance.brightness.toFixed(2)} ([/])`
+        param2Text = `Region: ${brightnessEffectInstance.halfScreenMode ? "Half" : "Full"} (H to toggle)`
         param1Visible = true
+        param2Visible = true
         break
       case "Gain":
         param1Text = `Gain Factor: ${gainEffectInstance.gain.toFixed(2)} ([/])`
@@ -520,6 +522,12 @@ export async function run(renderer: CliRenderer): Promise<void> {
     // Toggle super sampling
     if (key.name === "u") {
       engine.toggleSuperSampling()
+    }
+
+    // Toggle brightness half-screen mode
+    if (key.name === "h") {
+      const newMode = brightnessEffectInstance.toggleHalfScreenMode()
+      updateParameterUI()
     }
 
     // Toggle debug mode for console caller info

@@ -466,18 +466,23 @@ export class VignetteEffect {
 
 /**
  * Adjusts the overall brightness of the buffer using the native brightness method.
+ * Supports partial buffer application for half-screen effects.
  */
 export class BrightnessEffect {
   private _brightness: number
   private _cachedBrightness: number
+  private _halfScreenMode: boolean
+  private _cachedHalfScreenMode: boolean
   // Stores packed triplets [x, y, brightness_factor] per pixel
   private precomputedBrightnessTriplets: Float32Array | null = null
   private cachedWidth: number = -1
   private cachedHeight: number = -1
 
-  constructor(brightness: number = 1.0) {
+  constructor(brightness: number = 1.0, halfScreenMode: boolean = false) {
     this._brightness = Math.max(0, brightness)
     this._cachedBrightness = this._brightness
+    this._halfScreenMode = halfScreenMode
+    this._cachedHalfScreenMode = halfScreenMode
   }
 
   public set brightness(newBrightness: number) {
@@ -488,20 +493,47 @@ export class BrightnessEffect {
     return this._brightness
   }
 
-  private _computeFactors(width: number, height: number): void {
-    this.precomputedBrightnessTriplets = new Float32Array(width * height * 3)
-    let i = 0
+  public get halfScreenMode(): boolean {
+    return this._halfScreenMode
+  }
 
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        this.precomputedBrightnessTriplets[i++] = x
-        this.precomputedBrightnessTriplets[i++] = y
-        this.precomputedBrightnessTriplets[i++] = this._brightness
+  public toggleHalfScreenMode(): boolean {
+    this._halfScreenMode = !this._halfScreenMode
+    return this._halfScreenMode
+  }
+
+  private _computeFactors(width: number, height: number): void {
+    if (this._halfScreenMode) {
+      // Only compute for right half of screen
+      const startX = Math.floor(width / 2)
+      const pixelsToCompute = (width - startX) * height
+      this.precomputedBrightnessTriplets = new Float32Array(pixelsToCompute * 3)
+      let i = 0
+
+      for (let y = 0; y < height; y++) {
+        for (let x = startX; x < width; x++) {
+          this.precomputedBrightnessTriplets[i++] = x
+          this.precomputedBrightnessTriplets[i++] = y
+          this.precomputedBrightnessTriplets[i++] = this._brightness
+        }
+      }
+    } else {
+      // Full screen mode
+      this.precomputedBrightnessTriplets = new Float32Array(width * height * 3)
+      let i = 0
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          this.precomputedBrightnessTriplets[i++] = x
+          this.precomputedBrightnessTriplets[i++] = y
+          this.precomputedBrightnessTriplets[i++] = this._brightness
+        }
       }
     }
     this.cachedWidth = width
     this.cachedHeight = height
     this._cachedBrightness = this._brightness
+    this._cachedHalfScreenMode = this._halfScreenMode
   }
 
   /**
@@ -516,11 +548,12 @@ export class BrightnessEffect {
       return
     }
 
-    // Recompute brightness triplets if dimensions changed, brightness changed, or factors haven't been computed yet
+    // Recompute brightness triplets if dimensions changed, brightness changed, mode changed, or factors haven't been computed yet
     if (
       width !== this.cachedWidth ||
       height !== this.cachedHeight ||
       this._brightness !== this._cachedBrightness ||
+      this._halfScreenMode !== this._cachedHalfScreenMode ||
       !this.precomputedBrightnessTriplets
     ) {
       this._computeFactors(width, height)
