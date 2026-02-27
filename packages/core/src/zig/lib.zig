@@ -414,6 +414,13 @@ export fn bufferGain(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]const f
     bufferPtr.gain(triplets);
 }
 
+export fn bufferBrightness(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]const f32, tripletCount: usize) void {
+    if (tripletCount == 0) return;
+    const len = tripletCount * 3;
+    const triplets = tripletsPtr[0..len];
+    bufferPtr.brightness(triplets);
+}
+
 export fn bufferSaturate(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]const f32, tripletCount: usize, strength: f32) void {
     if (tripletCount == 0) return;
     const len = tripletCount * 3;

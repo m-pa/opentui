@@ -465,13 +465,19 @@ export class VignetteEffect {
 }
 
 /**
- * Adjusts the overall brightness of the buffer.
+ * Adjusts the overall brightness of the buffer using the native brightness method.
  */
 export class BrightnessEffect {
   private _brightness: number
+  private _cachedBrightness: number
+  // Stores packed triplets [x, y, brightness_factor] per pixel
+  private precomputedBrightnessTriplets: Float32Array | null = null
+  private cachedWidth: number = -1
+  private cachedHeight: number = -1
 
   constructor(brightness: number = 1.0) {
-    this._brightness = Math.max(0, brightness) // Ensure brightness is non-negative
+    this._brightness = Math.max(0, brightness)
+    this._cachedBrightness = this._brightness
   }
 
   public set brightness(newBrightness: number) {
@@ -482,35 +488,45 @@ export class BrightnessEffect {
     return this._brightness
   }
 
+  private _computeFactors(width: number, height: number): void {
+    this.precomputedBrightnessTriplets = new Float32Array(width * height * 3)
+    let i = 0
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        this.precomputedBrightnessTriplets[i++] = x
+        this.precomputedBrightnessTriplets[i++] = y
+        this.precomputedBrightnessTriplets[i++] = this._brightness
+      }
+    }
+    this.cachedWidth = width
+    this.cachedHeight = height
+    this._cachedBrightness = this._brightness
+  }
+
   /**
-   * Applies the brightness adjustment to the buffer.
+   * Applies the brightness adjustment to the buffer using the native brightness method.
    */
   public apply(buffer: OptimizedBuffer): void {
-    const size = buffer.width * buffer.height
-    const fg = buffer.buffers.fg
-    const bg = buffer.buffers.bg
-    const factor = this._brightness
+    const width = buffer.width
+    const height = buffer.height
 
     // No need to process if brightness is 1 (no change)
-    if (factor === 1.0) {
+    if (this._brightness === 1.0) {
       return
     }
 
-    for (let i = 0; i < size; i++) {
-      const colorIndex = i * 4
-
-      // Adjust foreground
-      fg[colorIndex] = Math.min(1.0, fg[colorIndex] * factor)
-      fg[colorIndex + 1] = Math.min(1.0, fg[colorIndex + 1] * factor)
-      fg[colorIndex + 2] = Math.min(1.0, fg[colorIndex + 2] * factor)
-      // Alpha fg[colorIndex + 3] remains unchanged
-
-      // Adjust background
-      bg[colorIndex] = Math.min(1.0, bg[colorIndex] * factor)
-      bg[colorIndex + 1] = Math.min(1.0, bg[colorIndex + 1] * factor)
-      bg[colorIndex + 2] = Math.min(1.0, bg[colorIndex + 2] * factor)
-      // Alpha bg[colorIndex + 3] remains unchanged
+    // Recompute brightness triplets if dimensions changed, brightness changed, or factors haven't been computed yet
+    if (
+      width !== this.cachedWidth ||
+      height !== this.cachedHeight ||
+      this._brightness !== this._cachedBrightness ||
+      !this.precomputedBrightnessTriplets
+    ) {
+      this._computeFactors(width, height)
     }
+
+    buffer.brightness(this.precomputedBrightnessTriplets!)
   }
 }
 
