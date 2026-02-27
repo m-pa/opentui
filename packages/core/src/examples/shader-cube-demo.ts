@@ -131,6 +131,9 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Protanopia Comp", matrix: Matrices.PROTANOPIA_COMP_MATRIX },
     { name: "Deuteranopia Comp", matrix: Matrices.DEUTERANOPIA_COMP_MATRIX },
     { name: "Tritanopia Comp", matrix: Matrices.TRITANOPIA_COMP_MATRIX },
+    // Creative effects
+    { name: "Technicolor", matrix: Matrices.TECHNICOLOR_MATRIX },
+    { name: "Solarization", matrix: Matrices.SOLARIZATION_MATRIX },
   ]
 
   // ColorMatrix effect that can cycle through all matrices

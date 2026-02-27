@@ -1,4 +1,3 @@
-
 // Standard sepia transformation matrix
 export const SEPIA_MATRIX = new Float32Array([
   0.393,
@@ -105,5 +104,36 @@ export const TRITANOPIA_COMP_MATRIX = new Float32Array([
   0.1,
   0.0,
   0.9, // Boost blue channel
+])
+
+/**
+ * Creative color effect matrices.
+ */
+
+// Technicolor effect - enhances reds and greens for a vintage Hollywood look
+export const TECHNICOLOR_MATRIX = new Float32Array([
+  1.5,
+  -0.2,
+  -0.3, // Red output - boosted with reduced green/blue influence
+  -0.3,
+  1.4,
+  -0.1, // Green output - boosted with reduced red/blue influence
+  -0.2,
+  -0.2,
+  1.4, // Blue output - slightly boosted
+])
+
+// Solarization effect - partial negative that creates a surreal look
+// Inverts blue channel strongly, partially inverts others
+export const SOLARIZATION_MATRIX = new Float32Array([
+  -0.5,
+  0.5,
+  0.5, // Red output - partial negative
+  0.5,
+  -0.5,
+  0.5, // Green output - partial negative
+  0.5,
+  0.5,
+  -0.5, // Blue output - partial negative
 ])
 
