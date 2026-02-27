@@ -596,6 +596,8 @@ export class SaturationEffect {
   private cachedHeight: number = -1
   // Optional initial triplets to use for selective saturation
   private initialTriplets: Float32Array | null = null
+  // Flag to force recomputation when triplets are updated
+  private shouldRecompute: boolean = true
 
   constructor(saturation: number = 1.0, initialTriplets?: Float32Array) {
     this._saturation = Math.max(0, saturation)
@@ -615,67 +617,47 @@ export class SaturationEffect {
   }
 
   /**
-   * Sets new triplets for selective saturation and marks cached data as stale.
+   * Sets new triplets for selective saturation and marks data for recompute.
    * This allows transforming the effect area at runtime.
    */
   public setTriplets(triplets: Float32Array | null): void {
     this.initialTriplets = triplets
     this.precomputedSaturationTriplets = triplets
-    // Invalidate cache to force recompute on next apply
-    this.cachedWidth = -1
-    this.cachedHeight = -1
-    this._cachedSaturation = -1
-  }
-
-  /**
-   * Gets the current triplets, if any.
-   */
-  public getTriplets(): Float32Array | null {
-    return this.initialTriplets
+    // Flag for recompute on next apply
+    this.shouldRecompute = true
   }
 
   private _computeFactors(width: number, height: number): void {
-    // If initial triplets provided, use them directly
-    if (this.initialTriplets) {
-      this.precomputedSaturationTriplets = this.initialTriplets
-      this.cachedWidth = width
-      this.cachedHeight = height
-      this._cachedSaturation = this._saturation
-      return
-    }
-
-    const pixelsToCompute = width * height
-
-    this.precomputedSaturationTriplets = new Float32Array(pixelsToCompute * 3)
-    let i = 0
-
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        this.precomputedSaturationTriplets[i++] = x
-        this.precomputedSaturationTriplets[i++] = y
-        this.precomputedSaturationTriplets[i++] = this._saturation
-      }
-    }
-
+    // initialTriplets must be provided to reach this method
+    this.precomputedSaturationTriplets = this.initialTriplets
     this.cachedWidth = width
     this.cachedHeight = height
     this._cachedSaturation = this._saturation
+    this.shouldRecompute = false
   }
 
   /**
    * Applies the saturation adjustment to the buffer using the native saturate method.
+   * Uses saturateUniform for uniform saturation when no triplets provided.
    */
   public apply(buffer: OptimizedBuffer): void {
     const width = buffer.width
     const height = buffer.height
 
-    // No need to process if saturation is 1 (no change) and no initial triplets
-    if (this._saturation === 1.0 && !this.initialTriplets) {
+    // No need to process if saturation is 1 (no change)
+    if (this._saturation === 1.0) {
       return
     }
 
-    // Recompute saturation triplets if dimensions changed, saturation changed, or factors haven't been computed yet
+    // If no triplets provided, use uniform saturation (much faster)
+    if (!this.initialTriplets) {
+      buffer.saturateUniform(this._saturation)
+      return
+    }
+
+    // Recompute saturation triplets if dimensions changed, saturation changed, flagged for recompute, or factors haven't been computed yet
     if (
+      this.shouldRecompute ||
       width !== this.cachedWidth ||
       height !== this.cachedHeight ||
       this._saturation !== this._cachedSaturation ||
