@@ -32,6 +32,7 @@ import {
   GainEffect,
   SaturationEffect,
   GrayscaleEffect,
+  type EffectRegion,
 } from "../post/filters"
 import type { OptimizedBuffer } from "../buffer"
 import { ThreeCliRenderer } from "../3d"
@@ -386,7 +387,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
   const controlsText = new TextRenderable(renderer, {
     id: "shader-controls",
     content:
-      "WASD: Move | QE: Rotate | ZX: Zoom | V: Light Viz | C: Light Color | L: Lights | M/N: Material | P/B/I: Maps | R: Reset | Space: Rotation | J/K Filter | [/]{/} Params | H: Bright Region",
+      "WASD: Move | QE: Rotate | ZX: Zoom | V: Light Viz | C: Light Color | L: Lights | M/N: Material | P/B/I: Maps | R: Reset | Space: Rotation | J/K Filter | [/]{/} Params | H: Region",
     position: "absolute",
     left: 0,
     top: HEIGHT - 2,
@@ -402,6 +403,16 @@ export async function run(renderer: CliRenderer): Promise<void> {
     let param1Visible = false
     let param2Visible = false
 
+    const getRegionName = (region: EffectRegion | null): string => {
+      if (!region) return "Full"
+      if (region.x === 0 && region.y === 0 && region.width === 0 && region.height === 0) return "Full"
+      if (region.x > 0 && region.y === 0) return "Right Half"
+      if (region.x === 0 && region.y === 0 && region.width > 0) return "Left Half"
+      if (region.x === 0 && region.y === 0 && region.height > 0) return "Top Half"
+      if (region.x === 0 && region.y > 0) return "Bottom Half"
+      return `Custom (${region.x},${region.y} ${region.width}x${region.height})`
+    }
+
     switch (selectedFilter.name) {
       case "Distortion":
         param1Text = `Distortion Chance: ${distortionEffectInstance.glitchChancePerSecond.toFixed(2)} ([/])`
@@ -411,17 +422,21 @@ export async function run(renderer: CliRenderer): Promise<void> {
         break
       case "Vignette":
         param1Text = `Vignette Strength: ${vignetteEffectInstance.strength.toFixed(2)} ([/])`
+        param2Text = `Region: ${getRegionName(vignetteEffectInstance.region)} (H to cycle)`
         param1Visible = true
+        param2Visible = true
         break
       case "Brightness":
         param1Text = `Brightness Factor: ${brightnessEffectInstance.brightness.toFixed(2)} ([/])`
-        param2Text = `Region: ${brightnessEffectInstance.halfScreenMode ? "Half" : "Full"} (H to toggle)`
+        param2Text = `Region: ${getRegionName(brightnessEffectInstance.region)} (H to cycle)`
         param1Visible = true
         param2Visible = true
         break
       case "Gain":
         param1Text = `Gain Factor: ${gainEffectInstance.gain.toFixed(2)} ([/])`
+        param2Text = `Region: ${getRegionName(gainEffectInstance.region)} (H to cycle)`
         param1Visible = true
+        param2Visible = true
         break
       case "Blur":
         param1Text = `Blur Radius: ${blurEffectInstance.radius} ([/])`
@@ -435,7 +450,9 @@ export async function run(renderer: CliRenderer): Promise<void> {
         break
       case "Saturation":
         param1Text = `Saturation: ${saturationEffectInstance.saturation.toFixed(2)} ([/])`
+        param2Text = `Region: ${getRegionName(saturationEffectInstance.region)} (H to cycle)`
         param1Visible = true
+        param2Visible = true
         break
     }
 
@@ -524,10 +541,52 @@ export async function run(renderer: CliRenderer): Promise<void> {
       engine.toggleSuperSampling()
     }
 
-    // Toggle brightness half-screen mode
+    // Cycle through region modes for current filter (if applicable)
     if (key.name === "h") {
-      const newMode = brightnessEffectInstance.toggleHalfScreenMode()
-      updateParameterUI()
+      const currentFilterName = filterFunctions[currentFilterIndex].name
+      const width = renderer.terminalWidth
+      const height = renderer.terminalHeight
+
+      const cycleRegion = (currentRegion: EffectRegion | null): EffectRegion | null => {
+        // Cycle: Full -> Right Half -> Left Half -> Top Half -> Bottom Half -> Full
+        if (!currentRegion) {
+          // Full -> Right Half
+          return { x: Math.floor(width / 2), y: 0, width: Math.ceil(width / 2), height }
+        }
+        if (currentRegion.x > 0 && currentRegion.y === 0) {
+          // Right Half -> Left Half
+          return { x: 0, y: 0, width: Math.floor(width / 2), height }
+        }
+        if (currentRegion.x === 0 && currentRegion.y === 0 && currentRegion.width < width) {
+          // Left Half -> Top Half
+          return { x: 0, y: 0, width, height: Math.floor(height / 2) }
+        }
+        if (currentRegion.x === 0 && currentRegion.y === 0 && currentRegion.height < height) {
+          // Top Half -> Bottom Half
+          return { x: 0, y: Math.floor(height / 2), width, height: Math.ceil(height / 2) }
+        }
+        // Bottom Half (or any other) -> Full
+        return null
+      }
+
+      switch (currentFilterName) {
+        case "Vignette":
+          vignetteEffectInstance.setRegion(cycleRegion(vignetteEffectInstance.region))
+          updateParameterUI()
+          break
+        case "Brightness":
+          brightnessEffectInstance.setRegion(cycleRegion(brightnessEffectInstance.region))
+          updateParameterUI()
+          break
+        case "Gain":
+          gainEffectInstance.setRegion(cycleRegion(gainEffectInstance.region))
+          updateParameterUI()
+          break
+        case "Saturation":
+          saturationEffectInstance.setRegion(cycleRegion(saturationEffectInstance.region))
+          updateParameterUI()
+          break
+      }
     }
 
     // Toggle debug mode for console caller info

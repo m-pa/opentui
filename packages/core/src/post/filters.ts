@@ -403,16 +403,21 @@ export class DistortionEffect {
 
 /**
  * Applies a vignette effect by darkening the corners, optimized with precomputation.
+ * Supports arbitrary region application.
  */
 export class VignetteEffect {
   private _strength: number
+  private _region: EffectRegion | null
+  private _cachedRegion: EffectRegion | null
   // Stores packed triplets [x, y, baseAttenuation] per pixel
   private precomputedAttenuationTriplets: Float32Array | null = null
   private cachedWidth: number = -1
   private cachedHeight: number = -1
 
-  constructor(strength: number = 0.5) {
+  constructor(strength: number = 0.5, region?: EffectRegion | null) {
     this._strength = strength
+    this._region = region ?? null
+    this._cachedRegion = this._region
   }
 
   public set strength(newStrength: number) {
@@ -423,18 +428,53 @@ export class VignetteEffect {
     return this._strength
   }
 
+  public get region(): EffectRegion | null {
+    return this._region
+  }
+
+  public setRegion(region: EffectRegion | null): void {
+    this._region = region
+  }
+
+  public clearRegion(): void {
+    this._region = null
+  }
+
+  private _regionsEqual(a: EffectRegion | null, b: EffectRegion | null): boolean {
+    if (a === null && b === null) return true
+    if (a === null || b === null) return false
+    return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+  }
+
   private _computeFactors(width: number, height: number): void {
-    this.precomputedAttenuationTriplets = new Float32Array(width * height * 3)
     const centerX = width / 2
     const centerY = height / 2
     const maxDistSq = centerX * centerX + centerY * centerY
     const safeMaxDistSq = maxDistSq === 0 ? 1 : maxDistSq // Avoid division by zero
+
+    let startX = 0
+    let startY = 0
+    let endX = width
+    let endY = height
+
+    if (this._region) {
+      startX = Math.max(0, Math.min(width, this._region.x))
+      startY = Math.max(0, Math.min(height, this._region.y))
+      endX = Math.max(0, Math.min(width, this._region.x + this._region.width))
+      endY = Math.max(0, Math.min(height, this._region.y + this._region.height))
+    }
+
+    const regionWidth = endX - startX
+    const regionHeight = endY - startY
+    const pixelsToCompute = regionWidth * regionHeight
+
+    this.precomputedAttenuationTriplets = new Float32Array(pixelsToCompute * 3)
     let i = 0
 
-    for (let y = 0; y < height; y++) {
+    for (let y = startY; y < endY; y++) {
       const dy = y - centerY
       const dySq = dy * dy
-      for (let x = 0; x < width; x++) {
+      for (let x = startX; x < endX; x++) {
         const dx = x - centerX
         const distSq = dx * dx + dySq
         // Calculate base attenuation (0 to 1 based on distance)
@@ -444,8 +484,10 @@ export class VignetteEffect {
         this.precomputedAttenuationTriplets[i++] = baseAttenuation
       }
     }
+
     this.cachedWidth = width
     this.cachedHeight = height
+    this._cachedRegion = this._region
   }
 
   /**
@@ -455,8 +497,13 @@ export class VignetteEffect {
     const width = buffer.width
     const height = buffer.height
 
-    // Recompute base attenuation if dimensions changed or factors haven't been computed yet
-    if (width !== this.cachedWidth || height !== this.cachedHeight || !this.precomputedAttenuationTriplets) {
+    // Recompute base attenuation if dimensions changed, region changed, or factors haven't been computed yet
+    if (
+      width !== this.cachedWidth ||
+      height !== this.cachedHeight ||
+      !this._regionsEqual(this._region, this._cachedRegion) ||
+      !this.precomputedAttenuationTriplets
+    ) {
       this._computeFactors(width, height)
     }
 
@@ -465,24 +512,35 @@ export class VignetteEffect {
 }
 
 /**
+ * Region definition for partial buffer effects.
+ * If null/undefined, applies to entire buffer.
+ */
+export interface EffectRegion {
+  x: number // Starting x position (0 = left)
+  y: number // Starting y position (0 = top)
+  width: number // Width of region
+  height: number // Height of region
+}
+
+/**
  * Adjusts the overall brightness of the buffer using the native brightness method.
- * Supports partial buffer application for half-screen effects.
+ * Supports arbitrary region application.
  */
 export class BrightnessEffect {
   private _brightness: number
   private _cachedBrightness: number
-  private _halfScreenMode: boolean
-  private _cachedHalfScreenMode: boolean
+  private _region: EffectRegion | null
+  private _cachedRegion: EffectRegion | null
   // Stores packed triplets [x, y, brightness_factor] per pixel
   private precomputedBrightnessTriplets: Float32Array | null = null
   private cachedWidth: number = -1
   private cachedHeight: number = -1
 
-  constructor(brightness: number = 1.0, halfScreenMode: boolean = false) {
+  constructor(brightness: number = 1.0, region?: EffectRegion | null) {
     this._brightness = Math.max(0, brightness)
     this._cachedBrightness = this._brightness
-    this._halfScreenMode = halfScreenMode
-    this._cachedHalfScreenMode = halfScreenMode
+    this._region = region ?? null
+    this._cachedRegion = this._region
   }
 
   public set brightness(newBrightness: number) {
@@ -493,47 +551,56 @@ export class BrightnessEffect {
     return this._brightness
   }
 
-  public get halfScreenMode(): boolean {
-    return this._halfScreenMode
+  public get region(): EffectRegion | null {
+    return this._region
   }
 
-  public toggleHalfScreenMode(): boolean {
-    this._halfScreenMode = !this._halfScreenMode
-    return this._halfScreenMode
+  public setRegion(region: EffectRegion | null): void {
+    this._region = region
+  }
+
+  public clearRegion(): void {
+    this._region = null
+  }
+
+  private _regionsEqual(a: EffectRegion | null, b: EffectRegion | null): boolean {
+    if (a === null && b === null) return true
+    if (a === null || b === null) return false
+    return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
   }
 
   private _computeFactors(width: number, height: number): void {
-    if (this._halfScreenMode) {
-      // Only compute for right half of screen
-      const startX = Math.floor(width / 2)
-      const pixelsToCompute = (width - startX) * height
-      this.precomputedBrightnessTriplets = new Float32Array(pixelsToCompute * 3)
-      let i = 0
+    let startX = 0
+    let startY = 0
+    let endX = width
+    let endY = height
 
-      for (let y = 0; y < height; y++) {
-        for (let x = startX; x < width; x++) {
-          this.precomputedBrightnessTriplets[i++] = x
-          this.precomputedBrightnessTriplets[i++] = y
-          this.precomputedBrightnessTriplets[i++] = this._brightness
-        }
-      }
-    } else {
-      // Full screen mode
-      this.precomputedBrightnessTriplets = new Float32Array(width * height * 3)
-      let i = 0
+    if (this._region) {
+      startX = Math.max(0, Math.min(width, this._region.x))
+      startY = Math.max(0, Math.min(height, this._region.y))
+      endX = Math.max(0, Math.min(width, this._region.x + this._region.width))
+      endY = Math.max(0, Math.min(height, this._region.y + this._region.height))
+    }
 
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          this.precomputedBrightnessTriplets[i++] = x
-          this.precomputedBrightnessTriplets[i++] = y
-          this.precomputedBrightnessTriplets[i++] = this._brightness
-        }
+    const regionWidth = endX - startX
+    const regionHeight = endY - startY
+    const pixelsToCompute = regionWidth * regionHeight
+
+    this.precomputedBrightnessTriplets = new Float32Array(pixelsToCompute * 3)
+    let i = 0
+
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        this.precomputedBrightnessTriplets[i++] = x
+        this.precomputedBrightnessTriplets[i++] = y
+        this.precomputedBrightnessTriplets[i++] = this._brightness
       }
     }
+
     this.cachedWidth = width
     this.cachedHeight = height
     this._cachedBrightness = this._brightness
-    this._cachedHalfScreenMode = this._halfScreenMode
+    this._cachedRegion = this._region
   }
 
   /**
@@ -548,12 +615,12 @@ export class BrightnessEffect {
       return
     }
 
-    // Recompute brightness triplets if dimensions changed, brightness changed, mode changed, or factors haven't been computed yet
+    // Recompute brightness triplets if dimensions changed, brightness changed, region changed, or factors haven't been computed yet
     if (
       width !== this.cachedWidth ||
       height !== this.cachedHeight ||
       this._brightness !== this._cachedBrightness ||
-      this._halfScreenMode !== this._cachedHalfScreenMode ||
+      !this._regionsEqual(this._region, this._cachedRegion) ||
       !this.precomputedBrightnessTriplets
     ) {
       this._computeFactors(width, height)
@@ -565,18 +632,23 @@ export class BrightnessEffect {
 
 /**
  * Adjusts the overall gain of the buffer using the native gain method.
+ * Supports arbitrary region application.
  */
 export class GainEffect {
   private _gain: number
   private _cachedGain: number
+  private _region: EffectRegion | null
+  private _cachedRegion: EffectRegion | null
   // Stores packed triplets [x, y, baseGain=1.0] per pixel for uniform gain
   private precomputedGainTriplets: Float32Array | null = null
   private cachedWidth: number = -1
   private cachedHeight: number = -1
 
-  constructor(gain: number = 1.0) {
+  constructor(gain: number = 1.0, region?: EffectRegion | null) {
     this._gain = Math.max(0, gain)
     this._cachedGain = this._gain
+    this._region = region ?? null
+    this._cachedRegion = this._region
   }
 
   public set gain(newGain: number) {
@@ -587,20 +659,56 @@ export class GainEffect {
     return this._gain
   }
 
+  public get region(): EffectRegion | null {
+    return this._region
+  }
+
+  public setRegion(region: EffectRegion | null): void {
+    this._region = region
+  }
+
+  public clearRegion(): void {
+    this._region = null
+  }
+
+  private _regionsEqual(a: EffectRegion | null, b: EffectRegion | null): boolean {
+    if (a === null && b === null) return true
+    if (a === null || b === null) return false
+    return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+  }
+
   private _computeFactors(width: number, height: number): void {
-    this.precomputedGainTriplets = new Float32Array(width * height * 3)
+    let startX = 0
+    let startY = 0
+    let endX = width
+    let endY = height
+
+    if (this._region) {
+      startX = Math.max(0, Math.min(width, this._region.x))
+      startY = Math.max(0, Math.min(height, this._region.y))
+      endX = Math.max(0, Math.min(width, this._region.x + this._region.width))
+      endY = Math.max(0, Math.min(height, this._region.y + this._region.height))
+    }
+
+    const regionWidth = endX - startX
+    const regionHeight = endY - startY
+    const pixelsToCompute = regionWidth * regionHeight
+
+    this.precomputedGainTriplets = new Float32Array(pixelsToCompute * 3)
     let i = 0
 
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
         this.precomputedGainTriplets[i++] = x
         this.precomputedGainTriplets[i++] = y
         this.precomputedGainTriplets[i++] = this._gain
       }
     }
+
     this.cachedWidth = width
     this.cachedHeight = height
     this._cachedGain = this._gain
+    this._cachedRegion = this._region
   }
 
   /**
@@ -615,11 +723,12 @@ export class GainEffect {
       return
     }
 
-    // Recompute base gain triplets if dimensions changed, gain changed, or factors haven't been computed yet
+    // Recompute base gain triplets if dimensions changed, gain changed, region changed, or factors haven't been computed yet
     if (
       width !== this.cachedWidth ||
       height !== this.cachedHeight ||
       this._gain !== this._cachedGain ||
+      !this._regionsEqual(this._region, this._cachedRegion) ||
       !this.precomputedGainTriplets
     ) {
       this._computeFactors(width, height)
@@ -639,18 +748,23 @@ export function applySaturation(buffer: OptimizedBuffer, strength: number = 1): 
 
 /**
  * Adjusts the overall saturation of the buffer using the native saturate method.
+ * Supports arbitrary region application.
  */
 export class SaturationEffect {
   private _saturation: number
   private _cachedSaturation: number
+  private _region: EffectRegion | null
+  private _cachedRegion: EffectRegion | null
   // Stores packed triplets [x, y, baseSaturation=1.0] per pixel for uniform saturation
   private precomputedSaturationTriplets: Float32Array | null = null
   private cachedWidth: number = -1
   private cachedHeight: number = -1
 
-  constructor(saturation: number = 1.0) {
+  constructor(saturation: number = 1.0, region?: EffectRegion | null) {
     this._saturation = Math.max(0, saturation)
     this._cachedSaturation = this._saturation
+    this._region = region ?? null
+    this._cachedRegion = this._region
   }
 
   public set saturation(newSaturation: number) {
@@ -661,20 +775,56 @@ export class SaturationEffect {
     return this._saturation
   }
 
+  public get region(): EffectRegion | null {
+    return this._region
+  }
+
+  public setRegion(region: EffectRegion | null): void {
+    this._region = region
+  }
+
+  public clearRegion(): void {
+    this._region = null
+  }
+
+  private _regionsEqual(a: EffectRegion | null, b: EffectRegion | null): boolean {
+    if (a === null && b === null) return true
+    if (a === null || b === null) return false
+    return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+  }
+
   private _computeFactors(width: number, height: number): void {
-    this.precomputedSaturationTriplets = new Float32Array(width * height * 3)
+    let startX = 0
+    let startY = 0
+    let endX = width
+    let endY = height
+
+    if (this._region) {
+      startX = Math.max(0, Math.min(width, this._region.x))
+      startY = Math.max(0, Math.min(height, this._region.y))
+      endX = Math.max(0, Math.min(width, this._region.x + this._region.width))
+      endY = Math.max(0, Math.min(height, this._region.y + this._region.height))
+    }
+
+    const regionWidth = endX - startX
+    const regionHeight = endY - startY
+    const pixelsToCompute = regionWidth * regionHeight
+
+    this.precomputedSaturationTriplets = new Float32Array(pixelsToCompute * 3)
     let i = 0
 
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
         this.precomputedSaturationTriplets[i++] = x
         this.precomputedSaturationTriplets[i++] = y
         this.precomputedSaturationTriplets[i++] = this._saturation
       }
     }
+
     this.cachedWidth = width
     this.cachedHeight = height
     this._cachedSaturation = this._saturation
+    this._cachedRegion = this._region
   }
 
   /**
@@ -689,11 +839,12 @@ export class SaturationEffect {
       return
     }
 
-    // Recompute base saturation triplets if dimensions changed, saturation changed, or factors haven't been computed yet
+    // Recompute base saturation triplets if dimensions changed, saturation changed, region changed, or factors haven't been computed yet
     if (
       width !== this.cachedWidth ||
       height !== this.cachedHeight ||
       this._saturation !== this._cachedSaturation ||
+      !this._regionsEqual(this._region, this._cachedRegion) ||
       !this.precomputedSaturationTriplets
     ) {
       this._computeFactors(width, height)
