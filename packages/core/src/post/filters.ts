@@ -568,14 +568,6 @@ export class GainEffect {
 }
 
 /**
- * Applies a saturation adjustment to the buffer using native saturateUniform.
- * @param strength - 0 = 0% saturation (fully grayscale), 1 = 100% saturation (no change)
- */
-export function applySaturation(buffer: OptimizedBuffer, strength: number = 1): void {
-  buffer.saturateUniform(strength)
-}
-
-/**
  * Applies a brightness adjustment to the buffer using native brightnessUniform.
  * @param brightness - brightness factor: <1.0 darkens, 1.0 unchanged, >1.0 brightens
  * This is much faster than BrightnessEffect when applying uniform brightness to the whole screen.

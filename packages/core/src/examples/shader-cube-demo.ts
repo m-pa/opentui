@@ -115,40 +115,29 @@ export async function run(renderer: CliRenderer): Promise<void> {
   const vignetteEffectInstance = new VignetteEffect()
   const brightnessEffectInstance = new BrightnessEffect()
   const gainEffectInstance = new GainEffect()
-  // Create triplets for right half of screen only (for selective saturation)
-  const rightHalfWidth = Math.floor(WIDTH / 2)
-  const rightHalfPixels = rightHalfWidth * HEIGHT
-  const saturationTriplets = new Float32Array(rightHalfPixels * 3)
-  let tripletIndex = 0
-  for (let y = 0; y < HEIGHT; y++) {
-    for (let x = Math.floor(WIDTH / 2); x < WIDTH; x++) {
-      saturationTriplets[tripletIndex++] = x
-      saturationTriplets[tripletIndex++] = y
-      saturationTriplets[tripletIndex++] = 0.5 // 50% saturation for right half
-    }
-  }
-
-  // Helper function to create full-screen triplets
-  function createFullScreenTriplets(width: number, height: number): Float32Array {
-    const fullScreenPixels = width * height
-    const triplets = new Float32Array(fullScreenPixels * 3)
+  // Helper function to create right-half triplets for selective saturation
+  function createRightHalfTriplets(width: number, height: number): Float32Array {
+    const rightHalfWidth = Math.floor(width / 2)
+    const rightHalfPixels = rightHalfWidth * height
+    const triplets = new Float32Array(rightHalfPixels * 3)
     let i = 0
     for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
+      for (let x = Math.floor(width / 2); x < width; x++) {
         triplets[i++] = x
         triplets[i++] = y
-        triplets[i++] = 0.5 // 50% saturation for full screen
+        triplets[i++] = 1
       }
     }
     return triplets
   }
 
-  // Full screen saturation mode toggle
+  // Full screen saturation mode toggle (null triplets = uniform)
   let saturationFullScreen = false
 
   const blurEffectInstance = new BlurEffect(1)
   const bloomEffectInstance = new BloomEffect(0.7, 0.3, 2)
-  const saturationEffectInstance = new SaturationEffect(1.0, saturationTriplets)
+  // Start with right-half triplets
+  const saturationEffectInstance = new SaturationEffect(1.0, createRightHalfTriplets(WIDTH, HEIGHT))
   const grayscaleEffectInstance = new GrayscaleEffect()
 
   // Registry of all available color matrices with their display names
@@ -206,7 +195,6 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Brightness", func: brightnessEffectInstance.apply.bind(brightnessEffectInstance) },
     { name: "Gain", func: gainEffectInstance.apply.bind(gainEffectInstance) },
     { name: "Saturation", func: saturationEffectInstance.apply.bind(saturationEffectInstance) },
-    { name: "Saturation (Uniform)", func: (buf, _dt) => Filters.applySaturation(buf, 0.5) },
   ]
 
   // Box in the background to show alpha channel works
@@ -650,10 +638,11 @@ export async function run(renderer: CliRenderer): Promise<void> {
     if (key.name === "t" && filterFunctions[currentFilterIndex].name === "Saturation") {
       saturationFullScreen = !saturationFullScreen
       if (saturationFullScreen) {
-        const fullScreenTriplets = createFullScreenTriplets(renderer.terminalWidth, renderer.terminalHeight)
-        saturationEffectInstance.setTriplets(fullScreenTriplets)
+        // null triplets = uniform saturation (uses saturateUniform, much faster)
+        saturationEffectInstance.setTriplets(null)
       } else {
-        saturationEffectInstance.setTriplets(saturationTriplets)
+        // triplets = selective saturation on right half
+        saturationEffectInstance.setTriplets(createRightHalfTriplets(renderer.terminalWidth, renderer.terminalHeight))
       }
       paramChanged = true
     }
