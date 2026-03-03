@@ -240,97 +240,34 @@ export class OptimizedBuffer {
     this.lib.bufferSetCellWithAlphaBlending(this.bufferPtr, x, y, char, fg, bg, attributes)
   }
 
-  public attenuate(cells: Array<[number, number, number]> | Float32Array, strength: number = 1): void {
+  public attenuate(cells: Float32Array, strength: number = 1): void {
     this.guard()
     if (strength === 0 || cells.length === 0) return
 
-    if (cells instanceof Float32Array) {
-      const tripletCount = Math.floor(cells.length / 3)
-      if (tripletCount === 0) return
-      this.lib.bufferAttenuate(this.bufferPtr, ptr(cells), tripletCount, strength)
-      return
-    }
-
-    const tripletCount = cells.length
-    const requiredLength = tripletCount * 3
-    let triplets = this._attenuateScratch
-
-    if (!triplets || triplets.length < requiredLength) {
-      triplets = new Float32Array(requiredLength)
-      this._attenuateScratch = triplets
-    }
-
-    for (let i = 0; i < tripletCount; i++) {
-      const [x, y, factor] = cells[i]
-      const base = i * 3
-      triplets[base] = x
-      triplets[base + 1] = y
-      triplets[base + 2] = factor
-    }
-
-    this.lib.bufferAttenuate(this.bufferPtr, ptr(triplets), tripletCount, strength)
+    const tripletCount = Math.floor(cells.length / 3)
+    if (tripletCount === 0) return
+    this.lib.bufferAttenuate(this.bufferPtr, ptr(cells), tripletCount, strength)
+    return
   }
 
-  public gain(cells: Array<[number, number, number]> | Float32Array): void {
+  public gain(cells: Float32Array): void {
     this.guard()
     if (cells.length === 0) return
 
-    if (cells instanceof Float32Array) {
-      const tripletCount = Math.floor(cells.length / 3)
-      if (tripletCount === 0) return
-      this.lib.bufferGain(this.bufferPtr, ptr(cells), tripletCount)
-      return
-    }
-
-    const tripletCount = cells.length
-    const requiredLength = tripletCount * 3
-    let triplets = this._attenuateScratch
-
-    if (!triplets || triplets.length < requiredLength) {
-      triplets = new Float32Array(requiredLength)
-      this._attenuateScratch = triplets
-    }
-
-    for (let i = 0; i < tripletCount; i++) {
-      const [x, y, factor] = cells[i]
-      const base = i * 3
-      triplets[base] = x
-      triplets[base + 1] = y
-      triplets[base + 2] = factor
-    }
-
-    this.lib.bufferGain(this.bufferPtr, ptr(triplets), tripletCount)
+    const tripletCount = Math.floor(cells.length / 3)
+    if (tripletCount === 0) return
+    this.lib.bufferGain(this.bufferPtr, ptr(cells), tripletCount)
+    return
   }
 
-  public brightness(cells: Array<[number, number, number]> | Float32Array): void {
+  public brightness(cells: Float32Array): void {
     this.guard()
     if (cells.length === 0) return
 
-    if (cells instanceof Float32Array) {
-      const tripletCount = Math.floor(cells.length / 3)
-      if (tripletCount === 0) return
-      this.lib.bufferBrightness(this.bufferPtr, ptr(cells), tripletCount)
-      return
-    }
-
-    const tripletCount = cells.length
-    const requiredLength = tripletCount * 3
-    let triplets = this._attenuateScratch
-
-    if (!triplets || triplets.length < requiredLength) {
-      triplets = new Float32Array(requiredLength)
-      this._attenuateScratch = triplets
-    }
-
-    for (let i = 0; i < tripletCount; i++) {
-      const [x, y, factor] = cells[i]
-      const base = i * 3
-      triplets[base] = x
-      triplets[base + 1] = y
-      triplets[base + 2] = factor
-    }
-
-    this.lib.bufferBrightness(this.bufferPtr, ptr(triplets), tripletCount)
+    const tripletCount = Math.floor(cells.length / 3)
+    if (tripletCount === 0) return
+    this.lib.bufferBrightness(this.bufferPtr, ptr(cells), tripletCount)
+    return
   }
 
   public brightnessUniform(brightness: number): void {
