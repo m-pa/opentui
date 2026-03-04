@@ -456,6 +456,8 @@ export class BrightnessEffect {
   private _computeFactors(width: number, height: number): void {
     const pixelsToCompute = width * height
 
+    // Triplets act as mask - all pixels enabled with factor 1.0
+    // Actual brightness value is passed as strength parameter
     this.precomputedBrightnessTriplets = new Float32Array(pixelsToCompute * 3)
     let i = 0
 
@@ -463,7 +465,7 @@ export class BrightnessEffect {
       for (let x = 0; x < width; x++) {
         this.precomputedBrightnessTriplets[i++] = x
         this.precomputedBrightnessTriplets[i++] = y
-        this.precomputedBrightnessTriplets[i++] = this._brightness
+        this.precomputedBrightnessTriplets[i++] = 1.0 // Mask value - full effect
       }
     }
 
@@ -479,22 +481,18 @@ export class BrightnessEffect {
     const width = buffer.width
     const height = buffer.height
 
-    // No need to process if brightness is 1 (no change)
+    // No need to process if brightness is 1 (no change) or strength is 0
     if (this._brightness === 1.0) {
       return
     }
 
-    // Recompute brightness triplets if dimensions changed, brightness changed, or factors haven't been computed yet
-    if (
-      width !== this.cachedWidth ||
-      height !== this.cachedHeight ||
-      this._brightness !== this._cachedBrightness ||
-      !this.precomputedBrightnessTriplets
-    ) {
+    // Recompute brightness triplets if dimensions changed or factors haven't been computed yet
+    if (width !== this.cachedWidth || height !== this.cachedHeight || !this.precomputedBrightnessTriplets) {
       this._computeFactors(width, height)
     }
 
-    buffer.brightness(this.precomputedBrightnessTriplets!)
+    // Pass brightness as strength parameter, triplets act as mask
+    buffer.brightness(this.precomputedBrightnessTriplets!, this._brightness)
   }
 }
 
@@ -525,6 +523,8 @@ export class GainEffect {
   private _computeFactors(width: number, height: number): void {
     const pixelsToCompute = width * height
 
+    // Triplets act as mask - all pixels enabled with factor 1.0
+    // Actual gain value is passed as strength parameter
     this.precomputedGainTriplets = new Float32Array(pixelsToCompute * 3)
     let i = 0
 
@@ -532,7 +532,7 @@ export class GainEffect {
       for (let x = 0; x < width; x++) {
         this.precomputedGainTriplets[i++] = x
         this.precomputedGainTriplets[i++] = y
-        this.precomputedGainTriplets[i++] = this._gain
+        this.precomputedGainTriplets[i++] = 1.0 // Mask value - full effect
       }
     }
 
@@ -548,32 +548,29 @@ export class GainEffect {
     const width = buffer.width
     const height = buffer.height
 
-    // No need to process if gain is 1 (no change)
+    // No need to process if gain is 1 (no change) or strength is 0
     if (this._gain === 1.0) {
       return
     }
 
-    // Recompute base gain triplets if dimensions changed, gain changed, or factors haven't been computed yet
-    if (
-      width !== this.cachedWidth ||
-      height !== this.cachedHeight ||
-      this._gain !== this._cachedGain ||
-      !this.precomputedGainTriplets
-    ) {
+    // Recompute gain triplets if dimensions changed or factors haven't been computed yet
+    if (width !== this.cachedWidth || height !== this.cachedHeight || !this.precomputedGainTriplets) {
       this._computeFactors(width, height)
     }
 
-    buffer.gain(this.precomputedGainTriplets!)
+    // Pass gain as strength parameter, triplets act as mask
+    buffer.gain(this.precomputedGainTriplets!, this._gain)
   }
 }
 
 /**
  * Applies a brightness adjustment to the buffer using native brightnessUniform.
  * @param brightness - brightness factor: <1.0 darkens, 1.0 unchanged, >1.0 brightens
+ * @param strength - strength multiplier (0.0 to 1.0)
  * This is much faster than BrightnessEffect when applying uniform brightness to the whole screen.
  */
-export function applyBrightness(buffer: OptimizedBuffer, brightness: number = 1.0): void {
-  buffer.brightnessUniform(brightness)
+export function applyBrightness(buffer: OptimizedBuffer, brightness: number = 1.0, strength: number = 1.0): void {
+  buffer.brightnessUniform(brightness, strength)
 }
 
 /**
@@ -643,7 +640,8 @@ export class SaturationEffect {
 
     // If no triplets provided, use uniform saturation (much faster)
     if (!this.initialTriplets) {
-      buffer.saturateUniform(this._saturation)
+      // Pass saturation as strength parameter (defaults to full strength=1.0)
+      buffer.saturateUniform(this._saturation, 1.0)
       return
     }
 
@@ -667,11 +665,26 @@ export class SaturationEffect {
  * Much faster than SaturationEffect as it skips triplet creation and iteration.
  */
 export class GrayscaleEffect {
+  private _strength: number
+
+  constructor(strength: number = 1.0) {
+    this._strength = Math.max(0, Math.min(1, strength))
+  }
+
+  public set strength(newStrength: number) {
+    this._strength = Math.max(0, Math.min(1, newStrength))
+  }
+
+  public get strength(): number {
+    return this._strength
+  }
+
   /**
    * Applies the grayscale effect using native saturateUniform.
    */
   public apply(buffer: OptimizedBuffer): void {
-    buffer.saturateUniform(0)
+    // saturation=0 for grayscale, with strength controlling intensity
+    buffer.saturateUniform(0, this._strength)
   }
 }
 
