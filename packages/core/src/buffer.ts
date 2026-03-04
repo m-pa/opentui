@@ -250,31 +250,31 @@ export class OptimizedBuffer {
     return
   }
 
-  public gain(cells: Float32Array): void {
+  public gain(cells: Float32Array, strength: number = 1): void {
     this.guard()
-    if (cells.length === 0) return
+    if (strength === 0 || cells.length === 0) return
 
     const tripletCount = Math.floor(cells.length / 3)
     if (tripletCount === 0) return
-    this.lib.bufferGain(this.bufferPtr, ptr(cells), tripletCount)
+    this.lib.bufferGain(this.bufferPtr, ptr(cells), tripletCount, strength)
     return
   }
 
-  public brightness(cells: Float32Array): void {
+  public brightness(cells: Float32Array, strength: number = 1): void {
     this.guard()
-    if (cells.length === 0) return
+    if (strength === 0 || cells.length === 0) return
 
     const tripletCount = Math.floor(cells.length / 3)
     if (tripletCount === 0) return
-    this.lib.bufferBrightness(this.bufferPtr, ptr(cells), tripletCount)
+    this.lib.bufferBrightness(this.bufferPtr, ptr(cells), tripletCount, strength)
     return
   }
 
-  public brightnessUniform(brightness: number): void {
+  public brightnessUniform(brightness: number, strength: number = 1): void {
     this.guard()
-    // No need to process if brightness is 1 (no change)
-    if (brightness === 1.0) return
-    this.lib.bufferBrightnessUniform(this.bufferPtr, brightness)
+    // No need to process if strength is 0 or brightness is 1 (no change)
+    if (strength === 0 || brightness === 1.0) return
+    this.lib.bufferBrightnessUniform(this.bufferPtr, brightness, strength)
   }
 
   public saturate(cells: Float32Array, strength: number = 1): void {
@@ -287,11 +287,11 @@ export class OptimizedBuffer {
     return
   }
 
-  public saturateUniform(saturation: number): void {
+  public saturateUniform(saturation: number, strength: number = 1): void {
     this.guard()
-    // No need to process if saturation is 1 (no change)
-    if (saturation === 1.0) return
-    this.lib.bufferSaturateUniform(this.bufferPtr, saturation)
+    // No need to process if strength is 0 or saturation is 1 (no change)
+    if (strength === 0 || saturation === 1.0) return
+    this.lib.bufferSaturateUniform(this.bufferPtr, saturation, strength)
   }
 
   /**

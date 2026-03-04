@@ -407,22 +407,22 @@ export fn bufferAttenuate(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]co
     bufferPtr.attenuate(triplets, strength);
 }
 
-export fn bufferGain(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]const f32, tripletCount: usize) void {
+export fn bufferGain(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]const f32, tripletCount: usize, strength: f32) void {
     if (tripletCount == 0) return;
     const len = tripletCount * 3;
     const triplets = tripletsPtr[0..len];
-    bufferPtr.gain(triplets);
+    bufferPtr.gain(triplets, strength);
 }
 
-export fn bufferBrightness(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]const f32, tripletCount: usize) void {
+export fn bufferBrightness(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]const f32, tripletCount: usize, strength: f32) void {
     if (tripletCount == 0) return;
     const len = tripletCount * 3;
     const triplets = tripletsPtr[0..len];
-    bufferPtr.brightness(triplets);
+    bufferPtr.brightness(triplets, strength);
 }
 
-export fn bufferBrightnessUniform(bufferPtr: *buffer.OptimizedBuffer, brightness: f32) void {
-    bufferPtr.brightnessUniform(brightness);
+export fn bufferBrightnessUniform(bufferPtr: *buffer.OptimizedBuffer, brightness: f32, strength: f32) void {
+    bufferPtr.brightnessUniform(brightness, strength);
 }
 
 export fn bufferSaturate(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]const f32, tripletCount: usize, strength: f32) void {
@@ -432,8 +432,8 @@ export fn bufferSaturate(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]con
     bufferPtr.saturate(triplets, strength);
 }
 
-export fn bufferSaturateUniform(bufferPtr: *buffer.OptimizedBuffer, saturation: f32) void {
-    bufferPtr.saturateUniform(saturation);
+export fn bufferSaturateUniform(bufferPtr: *buffer.OptimizedBuffer, saturation: f32, strength: f32) void {
+    bufferPtr.saturateUniform(saturation, strength);
 }
 
 export fn bufferColorMatrix(bufferPtr: *buffer.OptimizedBuffer, matrixPtr: [*]const f32, tripletsPtr: [*]const f32, tripletCount: usize) void {

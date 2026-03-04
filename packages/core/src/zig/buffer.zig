@@ -595,16 +595,16 @@ pub const OptimizedBuffer = struct {
         return self.respectAlpha;
     }
 
-    pub fn gain(self: *OptimizedBuffer, triplets: []const f32) void {
-        buffer_effects.gain(self, triplets);
+    pub fn gain(self: *OptimizedBuffer, triplets: []const f32, strength: f32) void {
+        buffer_effects.gain(self, triplets, strength);
     }
 
-    pub fn brightness(self: *OptimizedBuffer, triplets: []const f32) void {
-        buffer_effects.brightness(self, triplets);
+    pub fn brightness(self: *OptimizedBuffer, triplets: []const f32, strength: f32) void {
+        buffer_effects.brightness(self, triplets, strength);
     }
 
-    pub fn brightnessUniform(self: *OptimizedBuffer, brightness_factor: f32) void {
-        buffer_effects.brightnessUniform(self, brightness_factor);
+    pub fn brightnessUniform(self: *OptimizedBuffer, brightness_factor: f32, strength: f32) void {
+        buffer_effects.brightnessUniform(self, brightness_factor, strength);
     }
 
     pub fn attenuate(self: *OptimizedBuffer, triplets: []const f32, strength: f32) void {
@@ -615,8 +615,8 @@ pub const OptimizedBuffer = struct {
         buffer_effects.saturate(self, triplets, strength);
     }
 
-    pub fn saturateUniform(self: *OptimizedBuffer, saturation: f32) void {
-        buffer_effects.saturateUniform(self, saturation);
+    pub fn saturateUniform(self: *OptimizedBuffer, saturation: f32, strength: f32) void {
+        buffer_effects.saturateUniform(self, saturation, strength);
     }
 
     pub fn colorMatrix(self: *OptimizedBuffer, matrix: []const f32, triplets: []const f32) void {
