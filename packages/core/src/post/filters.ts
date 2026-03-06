@@ -122,19 +122,14 @@ export function applyAsciiArt(buffer: OptimizedBuffer, ramp: string = " .:-=+*#%
 }
 
 /**
- * Adjusts the overall brightness of the buffer using the native brightness method.
+ * Adjusts the overall brightness of the buffer using color matrix transformation.
+ * Brightness multiplies all RGB channels by the brightness factor with clamping to [0, 1].
  */
 export class BrightnessEffect {
   private _brightness: number
-  private _cachedBrightness: number
-  // Stores packed triplets [x, y, brightness_factor] per pixel
-  private precomputedBrightnessTriplets: Float32Array | null = null
-  private cachedWidth: number = -1
-  private cachedHeight: number = -1
 
   constructor(brightness: number = 1.0) {
     this._brightness = Math.max(0, brightness)
-    this._cachedBrightness = this._brightness
   }
 
   public set brightness(newBrightness: number) {
@@ -145,46 +140,35 @@ export class BrightnessEffect {
     return this._brightness
   }
 
-  private _computeFactors(width: number, height: number): void {
-    const pixelsToCompute = width * height
-
-    // Triplets act as mask - all pixels enabled with factor 1.0
-    // Actual brightness value is passed as strength parameter
-    this.precomputedBrightnessTriplets = new Float32Array(pixelsToCompute * 3)
-    let i = 0
-
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        this.precomputedBrightnessTriplets[i++] = x
-        this.precomputedBrightnessTriplets[i++] = y
-        this.precomputedBrightnessTriplets[i++] = 1.0 // Mask value - full effect
-      }
-    }
-
-    this.cachedWidth = width
-    this.cachedHeight = height
-    this._cachedBrightness = this._brightness
+  private _createBrightnessMatrix(brightness: number): Float32Array {
+    // Brightness matrix: diagonal matrix with brightness factor
+    // Multiplies all RGB channels by brightness (with clamping in colorMatrixUniform)
+    const b = brightness
+    return new Float32Array([
+      b,
+      0,
+      0, // Row 0 (Red output)
+      0,
+      b,
+      0, // Row 1 (Green output)
+      0,
+      0,
+      b, // Row 2 (Blue output)
+    ])
   }
 
   /**
-   * Applies the brightness adjustment to the buffer using the native brightness method.
+   * Applies the brightness adjustment to the buffer using colorMatrixUniform.
+   * Values are clamped to [0, 1] range after adjustment.
    */
   public apply(buffer: OptimizedBuffer): void {
-    const width = buffer.width
-    const height = buffer.height
-
-    // No need to process if brightness is 1 (no change) or strength is 0
+    // No need to process if brightness is 1 (no change)
     if (this._brightness === 1.0) {
       return
     }
 
-    // Recompute brightness triplets if dimensions changed or factors haven't been computed yet
-    if (width !== this.cachedWidth || height !== this.cachedHeight || !this.precomputedBrightnessTriplets) {
-      this._computeFactors(width, height)
-    }
-
-    // Pass brightness as strength parameter, triplets act as mask
-    buffer.brightness(this.precomputedBrightnessTriplets!, this._brightness)
+    const matrix = this._createBrightnessMatrix(this._brightness)
+    buffer.colorMatrixUniform(matrix, 1.0)
   }
 }
 
@@ -239,13 +223,29 @@ export class GainEffect {
 }
 
 /**
- * Applies a brightness adjustment to the buffer using native brightnessUniform.
+ * Applies a brightness adjustment to the buffer using colorMatrixUniform.
  * @param brightness - brightness factor: <1.0 darkens, 1.0 unchanged, >1.0 brightens
  * @param strength - strength multiplier (0.0 to 1.0)
- * This is much faster than BrightnessEffect when applying uniform brightness to the whole screen.
+ * Values are clamped to [0, 1] range after adjustment.
  */
 export function applyBrightness(buffer: OptimizedBuffer, brightness: number = 1.0, strength: number = 1.0): void {
-  buffer.brightnessUniform(brightness, strength)
+  if (strength === 0 || brightness === 1.0) return
+
+  // Create brightness matrix (diagonal with brightness factor)
+  const b = 1.0 + (brightness - 1.0) * strength
+  const matrix = new Float32Array([
+    b,
+    0,
+    0, // Row 0 (Red output)
+    0,
+    b,
+    0, // Row 1 (Green output)
+    0,
+    0,
+    b, // Row 2 (Blue output)
+  ])
+
+  buffer.colorMatrixUniform(matrix, 1.0)
 }
 
 /**
