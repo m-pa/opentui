@@ -43,25 +43,51 @@ export function applyInvert(buffer: OptimizedBuffer): void {
 }
 
 /**
- * Adds random noise to the buffer colors.
+ * Adds random noise to the buffer colors using colorMatrix with brightness matrix.
+ * Uses per-pixel random strength values to dim/brighten each cell.
+ * @param buffer - The buffer to apply the effect to
+ * @param strength - Noise intensity (0.1 = ±10% variation)
  */
 export function applyNoise(buffer: OptimizedBuffer, strength: number = 0.1): void {
-  const size = buffer.width * buffer.height
-  const fg = buffer.buffers.fg
-  const bg = buffer.buffers.bg
+  const width = buffer.width
+  const height = buffer.height
+  const size = width * height
 
-  for (let i = 0; i < size; i++) {
-    const colorIndex = i * 4
-    const noise = (Math.random() - 0.5) * strength
+  // Skip if no effect
+  if (strength === 0) return
 
-    fg[colorIndex] = Math.max(0, Math.min(1, fg[colorIndex] + noise))
-    fg[colorIndex + 1] = Math.max(0, Math.min(1, fg[colorIndex + 1] + noise))
-    fg[colorIndex + 2] = Math.max(0, Math.min(1, fg[colorIndex + 2] + noise))
+  // Generate random triplets with per-pixel strength values
+  // Each pixel gets [x, y, random_strength] where random_strength ranges from -1 to 1
+  const triplets = new Float32Array(size * 3)
+  let tripletIndex = 0
 
-    bg[colorIndex] = Math.max(0, Math.min(1, bg[colorIndex] + noise))
-    bg[colorIndex + 1] = Math.max(0, Math.min(1, bg[colorIndex + 1] + noise))
-    bg[colorIndex + 2] = Math.max(0, Math.min(1, bg[colorIndex + 2] + noise))
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      triplets[tripletIndex++] = x
+      triplets[tripletIndex++] = y
+      // Random strength from -1 to 1
+      triplets[tripletIndex++] = (Math.random() - 0.5) * 2
+    }
   }
+
+  // Brightness matrix: scales all channels by (1 + strength)
+  // With triplet strength S, result = original * (1 + (B - 1) * S)
+  // where B = 1 + strength
+  // So: S=1 → original * (1 + strength), S=-1 → original * (1 - strength)
+  const b = 1.0 + strength
+  const matrix = new Float32Array([
+    b,
+    0,
+    0, // Row 0 (Red output)
+    0,
+    b,
+    0, // Row 1 (Green output)
+    0,
+    0,
+    b, // Row 2 (Blue output)
+  ])
+
+  buffer.colorMatrix(matrix, triplets, 1.0)
 }
 
 /**
