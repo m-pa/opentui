@@ -27,7 +27,6 @@ import {
   DistortionEffect,
   VignetteEffect,
   BrightnessEffect,
-  BlurEffect,
   BloomEffect,
   GainEffect,
   GrayscaleEffect,
@@ -51,7 +50,6 @@ interface ShaderCubeDemoState {
   vignetteEffectInstance: VignetteEffect
   brightnessEffectInstance: BrightnessEffect
   gainEffectInstance: GainEffect
-  blurEffectInstance: BlurEffect
   bloomEffectInstance: BloomEffect
   saturationValue: number
   saturationTriplets: Float32Array | null
@@ -116,6 +114,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
   const vignetteEffectInstance = new VignetteEffect()
   const brightnessEffectInstance = new BrightnessEffect()
   const gainEffectInstance = new GainEffect()
+
   // Helper function to create right-half triplets for selective saturation
   function createRightHalfTriplets(width: number, height: number): Float32Array {
     const rightHalfWidth = Math.floor(width / 2)
@@ -135,7 +134,6 @@ export async function run(renderer: CliRenderer): Promise<void> {
   // Full screen saturation mode toggle (null triplets = uniform)
   let saturationFullScreen = false
 
-  const blurEffectInstance = new BlurEffect(1)
   const bloomEffectInstance = new BloomEffect(0.7, 0.3, 2)
   // Saturation state variables
   let saturationValue = 1.0
@@ -189,7 +187,6 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Color Matrix", func: colorMatrixEffectInstance.apply.bind(colorMatrixEffectInstance) },
     { name: "Invert", func: (buf, _dt) => Filters.applyInvert(buf) },
     { name: "Noise", func: (buf, _dt) => Filters.applyNoise(buf, 0.05) },
-    { name: "Blur", func: blurEffectInstance.apply.bind(blurEffectInstance) },
     { name: "Chromatic Aberration", func: (buf, _dt) => Filters.applyChromaticAberration(buf, 2) },
     { name: "ASCII Art", func: (buf, _dt) => Filters.applyAsciiArt(buf) },
     { name: "Bloom", func: bloomEffectInstance.apply.bind(bloomEffectInstance) },
@@ -479,10 +476,6 @@ export async function run(renderer: CliRenderer): Promise<void> {
         param1Text = `Gain Factor: ${gainEffectInstance.gain.toFixed(2)} ([/])`
         param1Visible = true
         break
-      case "Blur":
-        param1Text = `Blur Radius: ${blurEffectInstance.radius} ([/])`
-        param1Visible = true
-        break
       case "Bloom":
         param1Text = `Bloom Strength: ${bloomEffectInstance.strength.toFixed(2)} ([/])`
         param1Visible = true
@@ -675,10 +668,6 @@ export async function run(renderer: CliRenderer): Promise<void> {
           gainEffectInstance.gain = Math.max(0, gainEffectInstance.gain - 0.05)
           paramChanged = true
           break
-        case "Blur":
-          blurEffectInstance.radius = Math.max(0, blurEffectInstance.radius - 1)
-          paramChanged = true
-          break
         case "Bloom":
           bloomEffectInstance.strength = Math.max(0, bloomEffectInstance.strength - 0.05)
           paramChanged = true
@@ -711,10 +700,6 @@ export async function run(renderer: CliRenderer): Promise<void> {
           break
         case "Gain":
           gainEffectInstance.gain = Math.min(50, gainEffectInstance.gain + 0.05)
-          paramChanged = true
-          break
-        case "Blur":
-          blurEffectInstance.radius = Math.min(50, blurEffectInstance.radius + 1)
           paramChanged = true
           break
         case "Bloom":
@@ -839,7 +824,6 @@ export async function run(renderer: CliRenderer): Promise<void> {
     vignetteEffectInstance,
     brightnessEffectInstance,
     gainEffectInstance,
-    blurEffectInstance,
     bloomEffectInstance,
     saturationValue,
     saturationTriplets,
