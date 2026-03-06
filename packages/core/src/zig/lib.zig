@@ -407,13 +407,6 @@ export fn bufferAttenuate(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]co
     bufferPtr.attenuate(triplets, strength);
 }
 
-export fn bufferGain(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]const f32, tripletCount: usize, strength: f32) void {
-    if (tripletCount == 0) return;
-    const len = tripletCount * 3;
-    const triplets = tripletsPtr[0..len];
-    bufferPtr.gain(triplets, strength);
-}
-
 export fn bufferBrightness(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]const f32, tripletCount: usize, strength: f32) void {
     if (tripletCount == 0) return;
     const len = tripletCount * 3;

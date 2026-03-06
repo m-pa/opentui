@@ -250,16 +250,6 @@ export class OptimizedBuffer {
     return
   }
 
-  public gain(cells: Float32Array, strength: number = 1): void {
-    this.guard()
-    if (strength === 0 || cells.length === 0) return
-
-    const tripletCount = Math.floor(cells.length / 3)
-    if (tripletCount === 0) return
-    this.lib.bufferGain(this.bufferPtr, ptr(cells), tripletCount, strength)
-    return
-  }
-
   public brightness(cells: Float32Array, strength: number = 1): void {
     this.guard()
     if (strength === 0 || cells.length === 0) return
@@ -615,10 +605,10 @@ export class OptimizedBuffer {
     if (saturation === 1.0) return
     const matrix = this.createSaturationMatrix(saturation)
     if (!triplets || triplets.length === 0) {
-      this.lib.bufferColorMatrixUniform(this.bufferPtr, matrix, 1.0)
+      this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrix), 1.0)
     } else {
       const tripletCount = Math.floor(triplets.length / 3)
-      this.lib.bufferColorMatrix(this.bufferPtr, matrix, ptr(triplets), tripletCount)
+      this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(triplets), tripletCount)
     }
   }
 

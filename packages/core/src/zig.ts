@@ -258,10 +258,6 @@ function getOpenTUILib(libPath?: string) {
       args: ["ptr", "ptr", "usize", "f32"],
       returns: "void",
     },
-    bufferGain: {
-      args: ["ptr", "ptr", "usize", "f32"],
-      returns: "void",
-    },
     bufferBrightness: {
       args: ["ptr", "ptr", "usize", "f32"],
       returns: "void",
@@ -1460,7 +1456,6 @@ export interface RenderLib {
   ) => void
   bufferFillRect: (buffer: Pointer, x: number, y: number, width: number, height: number, color: RGBA) => void
   bufferAttenuate: (buffer: Pointer, tripletsPtr: Pointer, tripletCount: number, strength: number) => void
-  bufferGain: (buffer: Pointer, tripletsPtr: Pointer, tripletCount: number, strength: number) => void
   bufferBrightness: (buffer: Pointer, tripletsPtr: Pointer, tripletCount: number, strength: number) => void
   bufferBrightnessUniform: (buffer: Pointer, brightness: number, strength: number) => void
   bufferColorMatrix: (buffer: Pointer, matrixPtr: Pointer, tripletsPtr: Pointer, tripletCount: number) => void
@@ -2195,10 +2190,6 @@ class FFIRenderLib implements RenderLib {
 
   public bufferAttenuate(buffer: Pointer, tripletsPtr: Pointer, tripletCount: number, strength: number) {
     this.opentui.symbols.bufferAttenuate(buffer, tripletsPtr, tripletCount, strength)
-  }
-
-  public bufferGain(buffer: Pointer, tripletsPtr: Pointer, tripletCount: number, strength: number): void {
-    this.opentui.symbols.bufferGain(buffer, tripletsPtr, tripletCount, strength)
   }
 
   public bufferBrightness(buffer: Pointer, tripletsPtr: Pointer, tripletCount: number, strength: number): void {

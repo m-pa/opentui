@@ -189,19 +189,14 @@ export class BrightnessEffect {
 }
 
 /**
- * Adjusts the overall gain of the buffer using the native gain method.
+ * Adjusts the overall gain of the buffer using color matrix transformation.
+ * Gain multiplies all RGB channels by the gain factor (no clamping).
  */
 export class GainEffect {
   private _gain: number
-  private _cachedGain: number
-  // Stores packed triplets [x, y, baseGain=1.0] per pixel for uniform gain
-  private precomputedGainTriplets: Float32Array | null = null
-  private cachedWidth: number = -1
-  private cachedHeight: number = -1
 
   constructor(gain: number = 1.0) {
     this._gain = Math.max(0, gain)
-    this._cachedGain = this._gain
   }
 
   public set gain(newGain: number) {
@@ -212,46 +207,34 @@ export class GainEffect {
     return this._gain
   }
 
-  private _computeFactors(width: number, height: number): void {
-    const pixelsToCompute = width * height
-
-    // Triplets act as mask - all pixels enabled with factor 1.0
-    // Actual gain value is passed as strength parameter
-    this.precomputedGainTriplets = new Float32Array(pixelsToCompute * 3)
-    let i = 0
-
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        this.precomputedGainTriplets[i++] = x
-        this.precomputedGainTriplets[i++] = y
-        this.precomputedGainTriplets[i++] = 1.0 // Mask value - full effect
-      }
-    }
-
-    this.cachedWidth = width
-    this.cachedHeight = height
-    this._cachedGain = this._gain
+  private _createGainMatrix(gain: number): Float32Array {
+    // Gain matrix: diagonal matrix with gain factor
+    // Multiplies all RGB channels by gain (no clamping)
+    const g = gain
+    return new Float32Array([
+      g,
+      0,
+      0, // Row 0 (Red output)
+      0,
+      g,
+      0, // Row 1 (Green output)
+      0,
+      0,
+      g, // Row 2 (Blue output)
+    ])
   }
 
   /**
-   * Applies the gain adjustment to the buffer using the native gain method.
+   * Applies the gain adjustment to the buffer using colorMatrixUniform.
    */
   public apply(buffer: OptimizedBuffer): void {
-    const width = buffer.width
-    const height = buffer.height
-
-    // No need to process if gain is 1 (no change) or strength is 0
+    // No need to process if gain is 1 (no change)
     if (this._gain === 1.0) {
       return
     }
 
-    // Recompute gain triplets if dimensions changed or factors haven't been computed yet
-    if (width !== this.cachedWidth || height !== this.cachedHeight || !this.precomputedGainTriplets) {
-      this._computeFactors(width, height)
-    }
-
-    // Pass gain as strength parameter, triplets act as mask
-    buffer.gain(this.precomputedGainTriplets!, this._gain)
+    const matrix = this._createGainMatrix(this._gain)
+    buffer.colorMatrixUniform(matrix, 1.0)
   }
 }
 
