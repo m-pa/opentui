@@ -30,7 +30,6 @@ import {
   BlurEffect,
   BloomEffect,
   GainEffect,
-  applySaturation,
   GrayscaleEffect,
 } from "../post/filters"
 import * as Matrices from "../post/matrices"
@@ -197,7 +196,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Distortion", func: distortionEffectInstance.apply.bind(distortionEffectInstance) },
     { name: "Brightness", func: brightnessEffectInstance.apply.bind(brightnessEffectInstance) },
     { name: "Gain", func: gainEffectInstance.apply.bind(gainEffectInstance) },
-    { name: "Saturation", func: (buf, _dt) => applySaturation(buf, saturationTriplets ?? undefined, saturationValue) },
+    { name: "Saturation", func: (buf, _dt) => buf.saturate(saturationValue, saturationTriplets ?? undefined) },
   ]
 
   // Box in the background to show alpha channel works

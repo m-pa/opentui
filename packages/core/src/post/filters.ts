@@ -609,7 +609,7 @@ function createSaturationMatrix(saturation: number): Float32Array {
  *                   If not provided, applies uniform saturation to entire buffer.
  * @param strength - Saturation factor: 0.0 = grayscale, 1.0 = unchanged, >1.0 = oversaturated
  */
-export function applySaturation(buffer: OptimizedBuffer, triplets?: Float32Array, strength: number = 1.0): void {
+export function saturate(buffer: OptimizedBuffer, triplets?: Float32Array, strength: number = 1.0): void {
   // No need to process if saturation is 1 (no change) or strength is 0
   if (strength === 1.0 || strength === 0) {
     return

@@ -603,4 +603,46 @@ export class OptimizedBuffer {
     this.guard()
     this.lib.bufferDrawChar(this.bufferPtr, char, x, y, fg, bg, attributes)
   }
+
+  /**
+   * Apply a saturation adjustment to the buffer using a color matrix.
+   * @param saturation - 0.0 = grayscale, 1.0 = unchanged, >1.0 = oversaturated
+   * @param triplets - Optional array of [x, y, strength] triplets for selective saturation.
+   *                   If not provided, applies uniform saturation to entire buffer.
+   */
+  public saturate(saturation: number = 1.0, triplets?: Float32Array): void {
+    this.guard()
+    if (saturation === 1.0) return
+    const matrix = this.createSaturationMatrix(saturation)
+    if (!triplets || triplets.length === 0) {
+      this.lib.bufferColorMatrixUniform(this.bufferPtr, matrix, 1.0)
+    } else {
+      const tripletCount = Math.floor(triplets.length / 3)
+      this.lib.bufferColorMatrix(this.bufferPtr, matrix, ptr(triplets), tripletCount)
+    }
+  }
+
+  private createSaturationMatrix(saturation: number): Float32Array {
+    const s = Math.max(0, saturation)
+    const sr = 0.299 * (1 - s)
+    const sg = 0.587 * (1 - s)
+    const sb = 0.114 * (1 - s)
+
+    // Row 0 (Red output)
+    const m00 = sr + s
+    const m01 = sg
+    const m02 = sb
+
+    // Row 1 (Green output)
+    const m10 = sr
+    const m11 = sg + s
+    const m12 = sb
+
+    // Row 2 (Blue output)
+    const m20 = sr
+    const m21 = sg
+    const m22 = sb + s
+
+    return new Float32Array([m00, m01, m02, m10, m11, m12, m20, m21, m22])
+  }
 }
