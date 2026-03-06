@@ -250,13 +250,16 @@ export class DistortionEffect {
 
 /**
  * Applies a vignette effect by darkening the corners, optimized with precomputation.
+ * Uses native colorMatrix with a zero matrix for attenuation.
  */
 export class VignetteEffect {
   private _strength: number
-  // Stores packed triplets [x, y, baseAttenuation] per pixel
+  // Stores packed triplets [x, y, attenuation] per pixel
   private precomputedAttenuationTriplets: Float32Array | null = null
   private cachedWidth: number = -1
   private cachedHeight: number = -1
+  // Zero matrix for attenuation (maps everything toward black based on strength)
+  private static zeroMatrix = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0])
 
   constructor(strength: number = 0.5) {
     this._strength = strength
@@ -264,6 +267,10 @@ export class VignetteEffect {
 
   public set strength(newStrength: number) {
     this._strength = Math.max(0, newStrength) // Ensure strength is non-negative
+    // Invalidate cached triplets when strength changes
+    this.cachedWidth = -1
+    this.cachedHeight = -1
+    this.precomputedAttenuationTriplets = null
   }
 
   public get strength(): number {
@@ -276,6 +283,7 @@ export class VignetteEffect {
     const centerY = height / 2
     const maxDistSq = centerX * centerX + centerY * centerY
     const safeMaxDistSq = maxDistSq === 0 ? 1 : maxDistSq // Avoid division by zero
+    const strength = this._strength
     let i = 0
 
     for (let y = 0; y < height; y++) {
@@ -286,9 +294,11 @@ export class VignetteEffect {
         const distSq = dx * dx + dySq
         // Calculate base attenuation (0 to 1 based on distance)
         const baseAttenuation = Math.min(1, distSq / safeMaxDistSq)
+        // Precompute final attenuation value including strength
+        const attenuation = baseAttenuation * strength
         this.precomputedAttenuationTriplets[i++] = x
         this.precomputedAttenuationTriplets[i++] = y
-        this.precomputedAttenuationTriplets[i++] = baseAttenuation
+        this.precomputedAttenuationTriplets[i++] = attenuation
       }
     }
     this.cachedWidth = width
@@ -296,46 +306,24 @@ export class VignetteEffect {
   }
 
   /**
-   * Applies the vignette effect by directly modifying buffer colors.
+   * Applies the vignette effect using native colorMatrix with a zero matrix.
+   * The zero matrix maps all colors to black, and the attenuation triplets
+   * control how much of the effect is applied (strength-based blending).
    */
   public apply(buffer: OptimizedBuffer): void {
     const width = buffer.width
     const height = buffer.height
 
-    // Recompute base attenuation if dimensions changed or factors haven't been computed yet
+    // Recompute attenuation triplets if dimensions changed, strength changed,
+    // or factors haven't been computed yet
     if (width !== this.cachedWidth || height !== this.cachedHeight || !this.precomputedAttenuationTriplets) {
       this._computeFactors(width, height)
     }
 
-    // Apply attenuation directly to buffer
-    const fg = buffer.buffers.fg
-    const bg = buffer.buffers.bg
-    const triplets = this.precomputedAttenuationTriplets!
-    const strength = this._strength
-
-    for (let i = 0; i < triplets.length; i += 3) {
-      const x = triplets[i]
-      const y = triplets[i + 1]
-      const baseAttenuation = triplets[i + 2]
-
-      if (baseAttenuation <= 0) continue
-
-      const attenuation = baseAttenuation * strength
-      if (attenuation <= 0) continue
-
-      const factor = attenuation >= 1.0 ? 0.0 : 1.0 - attenuation
-
-      const index = (y * width + x) * 4
-
-      // Apply to foreground
-      fg[index] *= factor
-      fg[index + 1] *= factor
-      fg[index + 2] *= factor
-
-      // Apply to background
-      bg[index] *= factor
-      bg[index + 1] *= factor
-      bg[index + 2] *= factor
-    }
+    // Use colorMatrix with zero matrix to apply attenuation
+    // colorMatrix blends: result = original + (transformed - original) × strength
+    // With zero matrix: transformed = 0
+    // Result = original + (0 - original) × attenuation = original × (1 - attenuation)
+    buffer.colorMatrix(VignetteEffect.zeroMatrix, this.precomputedAttenuationTriplets!)
   }
 }
