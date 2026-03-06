@@ -30,7 +30,7 @@ import {
   BlurEffect,
   BloomEffect,
   GainEffect,
-  SaturationEffect,
+  applySaturation,
   GrayscaleEffect,
 } from "../post/filters"
 import * as Matrices from "../post/matrices"
@@ -54,7 +54,9 @@ interface ShaderCubeDemoState {
   gainEffectInstance: GainEffect
   blurEffectInstance: BlurEffect
   bloomEffectInstance: BloomEffect
-  saturationEffectInstance: SaturationEffect
+  saturationValue: number
+  saturationTriplets: Float32Array | null
+  saturationFullScreen: boolean
   grayscaleEffectInstance: GrayscaleEffect
   colorMatrixEffectInstance: ColorMatrixEffect
   filterFunctions: { name: string; func: ((buffer: OptimizedBuffer, deltaTime: number) => void) | null }[]
@@ -136,8 +138,9 @@ export async function run(renderer: CliRenderer): Promise<void> {
 
   const blurEffectInstance = new BlurEffect(1)
   const bloomEffectInstance = new BloomEffect(0.7, 0.3, 2)
-  // Start with right-half triplets
-  const saturationEffectInstance = new SaturationEffect(1.0, createRightHalfTriplets(WIDTH, HEIGHT))
+  // Saturation state variables
+  let saturationValue = 1.0
+  let saturationTriplets: Float32Array | null = createRightHalfTriplets(WIDTH, HEIGHT)
   const grayscaleEffectInstance = new GrayscaleEffect()
 
   // Registry of all available color matrices with their display names
@@ -194,7 +197,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Distortion", func: distortionEffectInstance.apply.bind(distortionEffectInstance) },
     { name: "Brightness", func: brightnessEffectInstance.apply.bind(brightnessEffectInstance) },
     { name: "Gain", func: gainEffectInstance.apply.bind(gainEffectInstance) },
-    { name: "Saturation", func: saturationEffectInstance.apply.bind(saturationEffectInstance) },
+    { name: "Saturation", func: (buf, _dt) => applySaturation(buf, saturationTriplets ?? undefined, saturationValue) },
   ]
 
   // Box in the background to show alpha channel works
@@ -486,7 +489,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
         param1Visible = true
         break
       case "Saturation":
-        param1Text = `Saturation: ${saturationEffectInstance.saturation.toFixed(2)} (T: ${saturationFullScreen ? "Full" : "Half"}) ([/])`
+        param1Text = `Saturation: ${saturationValue.toFixed(2)} (T: ${saturationFullScreen ? "Full" : "Half"}) ([/])`
         param1Visible = true
         break
       case "Color Matrix":
@@ -639,10 +642,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
       saturationFullScreen = !saturationFullScreen
       if (saturationFullScreen) {
         // null triplets = uniform saturation (uses colorMatrixUniform, much faster)
-        saturationEffectInstance.setTriplets(null)
+        saturationTriplets = null
       } else {
         // triplets = selective saturation on right half
-        saturationEffectInstance.setTriplets(createRightHalfTriplets(renderer.terminalWidth, renderer.terminalHeight))
+        saturationTriplets = createRightHalfTriplets(renderer.terminalWidth, renderer.terminalHeight)
       }
       paramChanged = true
     }
@@ -682,7 +685,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
           paramChanged = true
           break
         case "Saturation":
-          saturationEffectInstance.saturation = Math.max(0, saturationEffectInstance.saturation - 0.05)
+          saturationValue = Math.max(0, saturationValue - 0.05)
           paramChanged = true
           break
         case "Color Matrix":
@@ -720,7 +723,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
           paramChanged = true
           break
         case "Saturation":
-          saturationEffectInstance.saturation = Math.min(10, saturationEffectInstance.saturation + 0.05)
+          saturationValue = Math.min(10, saturationValue + 0.05)
           paramChanged = true
           break
         case "Color Matrix":
@@ -839,7 +842,9 @@ export async function run(renderer: CliRenderer): Promise<void> {
     gainEffectInstance,
     blurEffectInstance,
     bloomEffectInstance,
-    saturationEffectInstance,
+    saturationValue,
+    saturationTriplets,
+    saturationFullScreen,
     grayscaleEffectInstance,
     colorMatrixEffectInstance,
     filterFunctions,

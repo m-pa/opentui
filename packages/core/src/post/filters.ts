@@ -603,95 +603,25 @@ function createSaturationMatrix(saturation: number): Float32Array {
 }
 
 /**
- * Adjusts the overall saturation of the buffer using the native colorMatrix method.
+ * Applies a saturation adjustment to the buffer.
+ * @param buffer - The buffer to apply the effect to
+ * @param triplets - Optional array of [x, y, strength] triplets for selective saturation.
+ *                   If not provided, applies uniform saturation to entire buffer.
+ * @param strength - Saturation factor: 0.0 = grayscale, 1.0 = unchanged, >1.0 = oversaturated
  */
-export class SaturationEffect {
-  private _saturation: number
-  private _cachedSaturation: number
-  // Stores the color matrix for the current saturation
-  private saturationMatrix: Float32Array
-  // Stores packed triplets [x, y, strength] per pixel
-  private precomputedTriplets: Float32Array | null = null
-  private cachedWidth: number = -1
-  private cachedHeight: number = -1
-  // Optional initial triplets to use for selective saturation
-  private initialTriplets: Float32Array | null = null
-  // Flag to force recomputation when triplets are updated
-  private shouldRecompute: boolean = true
-
-  constructor(saturation: number = 1.0, initialTriplets?: Float32Array) {
-    this._saturation = Math.max(0, saturation)
-    this._cachedSaturation = this._saturation
-    this.saturationMatrix = createSaturationMatrix(this._saturation)
-    if (initialTriplets) {
-      this.initialTriplets = initialTriplets
-      this.precomputedTriplets = initialTriplets
-    }
+export function applySaturation(buffer: OptimizedBuffer, triplets?: Float32Array, strength: number = 1.0): void {
+  // No need to process if saturation is 1 (no change) or strength is 0
+  if (strength === 1.0 || strength === 0) {
+    return
   }
 
-  public set saturation(newSaturation: number) {
-    this._saturation = Math.max(0, newSaturation)
-    // Update matrix when saturation changes
-    this.saturationMatrix = createSaturationMatrix(this._saturation)
-  }
+  const matrix = createSaturationMatrix(strength)
 
-  public get saturation(): number {
-    return this._saturation
-  }
-
-  /**
-   * Sets new triplets for selective saturation and marks data for recompute.
-   * This allows transforming the effect area at runtime.
-   */
-  public setTriplets(triplets: Float32Array | null): void {
-    this.initialTriplets = triplets
-    this.precomputedTriplets = triplets
-    // Flag for recompute on next apply
-    this.shouldRecompute = true
-  }
-
-  private _computeTriplets(width: number, height: number): void {
-    // initialTriplets must be provided to reach this method
-    this.precomputedTriplets = this.initialTriplets
-    this.cachedWidth = width
-    this.cachedHeight = height
-    this._cachedSaturation = this._saturation
-    this.shouldRecompute = false
-  }
-
-  /**
-   * Applies the saturation adjustment to the buffer using the native colorMatrix method.
-   * Uses colorMatrixUniform for uniform saturation when no triplets provided.
-   */
-  public apply(buffer: OptimizedBuffer): void {
-    const width = buffer.width
-    const height = buffer.height
-
-    // No need to process if saturation is 1 (no change)
-    if (this._saturation === 1.0) {
-      return
-    }
-
-    // If no triplets provided, use uniform saturation (much faster)
-    if (!this.initialTriplets) {
-      buffer.colorMatrixUniform(this.saturationMatrix, 1.0)
-      return
-    }
-
-    // Recompute triplets if dimensions changed, saturation changed, flagged for recompute, or factors haven't been computed yet
-    if (
-      this.shouldRecompute ||
-      width !== this.cachedWidth ||
-      height !== this.cachedHeight ||
-      this._saturation !== this._cachedSaturation ||
-      !this.precomputedTriplets
-    ) {
-      this._computeTriplets(width, height)
-      // Update matrix in case saturation changed
-      this.saturationMatrix = createSaturationMatrix(this._saturation)
-    }
-
-    buffer.colorMatrix(this.saturationMatrix, this.precomputedTriplets!, 1.0)
+  // If no triplets provided, use uniform saturation (much faster)
+  if (!triplets || triplets.length === 0) {
+    buffer.colorMatrixUniform(matrix, 1.0)
+  } else {
+    buffer.colorMatrix(matrix, triplets, 1.0)
   }
 }
 
