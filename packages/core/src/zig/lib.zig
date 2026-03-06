@@ -400,13 +400,6 @@ export fn bufferFillRect(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, wid
     bufferPtr.fillRect(x, y, width, height, rgbaBg) catch {};
 }
 
-export fn bufferAttenuate(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]const f32, tripletCount: usize, strength: f32) void {
-    if (tripletCount == 0) return;
-    const len = tripletCount * 3;
-    const triplets = tripletsPtr[0..len];
-    bufferPtr.attenuate(triplets, strength);
-}
-
 export fn bufferColorMatrix(bufferPtr: *buffer.OptimizedBuffer, matrixPtr: [*]const f32, tripletsPtr: [*]const f32, tripletCount: usize) void {
     if (tripletCount == 0) return;
     const matrix = matrixPtr[0..9];

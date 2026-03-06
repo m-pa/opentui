@@ -55,7 +55,6 @@ export class OptimizedBuffer {
     bg: Float32Array
     attributes: Uint32Array
   } | null = null
-  private _attenuateScratch: Float32Array | null = null
   private _destroyed: boolean = false
 
   get ptr(): Pointer {
@@ -238,16 +237,6 @@ export class OptimizedBuffer {
   ): void {
     this.guard()
     this.lib.bufferSetCellWithAlphaBlending(this.bufferPtr, x, y, char, fg, bg, attributes)
-  }
-
-  public attenuate(cells: Float32Array, strength: number = 1): void {
-    this.guard()
-    if (strength === 0 || cells.length === 0) return
-
-    const tripletCount = Math.floor(cells.length / 3)
-    if (tripletCount === 0) return
-    this.lib.bufferAttenuate(this.bufferPtr, ptr(cells), tripletCount, strength)
-    return
   }
 
   /**

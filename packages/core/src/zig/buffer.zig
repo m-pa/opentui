@@ -595,10 +595,6 @@ pub const OptimizedBuffer = struct {
         return self.respectAlpha;
     }
 
-    pub fn attenuate(self: *OptimizedBuffer, triplets: []const f32, strength: f32) void {
-        buffer_effects.attenuate(self, triplets, strength);
-    }
-
     pub fn colorMatrix(self: *OptimizedBuffer, matrix: []const f32, triplets: []const f32) void {
         buffer_effects.colorMatrix(self, matrix, triplets);
     }

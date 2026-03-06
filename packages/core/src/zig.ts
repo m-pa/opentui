@@ -254,10 +254,6 @@ function getOpenTUILib(libPath?: string) {
       args: ["ptr", "u32", "u32", "u32", "u32", "ptr"],
       returns: "void",
     },
-    bufferAttenuate: {
-      args: ["ptr", "ptr", "usize", "f32"],
-      returns: "void",
-    },
     bufferColorMatrix: {
       args: ["ptr", "ptr", "ptr", "usize"],
       returns: "void",
@@ -1447,7 +1443,6 @@ export interface RenderLib {
     attributes?: number,
   ) => void
   bufferFillRect: (buffer: Pointer, x: number, y: number, width: number, height: number, color: RGBA) => void
-  bufferAttenuate: (buffer: Pointer, tripletsPtr: Pointer, tripletCount: number, strength: number) => void
   bufferColorMatrix: (buffer: Pointer, matrixPtr: Pointer, tripletsPtr: Pointer, tripletCount: number) => void
   bufferColorMatrixUniform: (buffer: Pointer, matrixPtr: Pointer, strength: number) => void
   bufferDrawSuperSampleBuffer: (
@@ -2176,10 +2171,6 @@ class FFIRenderLib implements RenderLib {
   public bufferFillRect(buffer: Pointer, x: number, y: number, width: number, height: number, color: RGBA) {
     const bg = color.buffer
     this.opentui.symbols.bufferFillRect(buffer, x, y, width, height, bg)
-  }
-
-  public bufferAttenuate(buffer: Pointer, tripletsPtr: Pointer, tripletCount: number, strength: number) {
-    this.opentui.symbols.bufferAttenuate(buffer, tripletsPtr, tripletCount, strength)
   }
 
   public bufferColorMatrix(buffer: Pointer, matrixPtr: Pointer, tripletsPtr: Pointer, tripletCount: number): void {

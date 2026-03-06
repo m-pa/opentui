@@ -296,7 +296,7 @@ export class VignetteEffect {
   }
 
   /**
-   * Applies the vignette effect using precomputed base attenuation and current strength.
+   * Applies the vignette effect by directly modifying buffer colors.
    */
   public apply(buffer: OptimizedBuffer): void {
     const width = buffer.width
@@ -307,6 +307,35 @@ export class VignetteEffect {
       this._computeFactors(width, height)
     }
 
-    buffer.attenuate(this.precomputedAttenuationTriplets!, this._strength)
+    // Apply attenuation directly to buffer
+    const fg = buffer.buffers.fg
+    const bg = buffer.buffers.bg
+    const triplets = this.precomputedAttenuationTriplets!
+    const strength = this._strength
+
+    for (let i = 0; i < triplets.length; i += 3) {
+      const x = triplets[i]
+      const y = triplets[i + 1]
+      const baseAttenuation = triplets[i + 2]
+
+      if (baseAttenuation <= 0) continue
+
+      const attenuation = baseAttenuation * strength
+      if (attenuation <= 0) continue
+
+      const factor = attenuation >= 1.0 ? 0.0 : 1.0 - attenuation
+
+      const index = (y * width + x) * 4
+
+      // Apply to foreground
+      fg[index] *= factor
+      fg[index + 1] *= factor
+      fg[index + 2] *= factor
+
+      // Apply to background
+      bg[index] *= factor
+      bg[index + 1] *= factor
+      bg[index + 2] *= factor
+    }
   }
 }
