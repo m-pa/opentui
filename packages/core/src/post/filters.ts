@@ -122,117 +122,18 @@ export function applyAsciiArt(buffer: OptimizedBuffer, ramp: string = " .:-=+*#%
 }
 
 /**
- * Adjusts the overall brightness of the buffer using color matrix transformation.
+ * Adjusts the brightness of the buffer using color matrix transformation.
  * Brightness multiplies all RGB channels by the brightness factor with clamping to [0, 1].
- */
-export class BrightnessEffect {
-  private _brightness: number
-
-  constructor(brightness: number = 1.0) {
-    this._brightness = Math.max(0, brightness)
-  }
-
-  public set brightness(newBrightness: number) {
-    this._brightness = Math.max(0, newBrightness)
-  }
-
-  public get brightness(): number {
-    return this._brightness
-  }
-
-  private _createBrightnessMatrix(brightness: number): Float32Array {
-    // Brightness matrix: diagonal matrix with brightness factor
-    // Multiplies all RGB channels by brightness (with clamping in colorMatrixUniform)
-    const b = brightness
-    return new Float32Array([
-      b,
-      0,
-      0, // Row 0 (Red output)
-      0,
-      b,
-      0, // Row 1 (Green output)
-      0,
-      0,
-      b, // Row 2 (Blue output)
-    ])
-  }
-
-  /**
-   * Applies the brightness adjustment to the buffer using colorMatrixUniform.
-   * Values are clamped to [0, 1] range after adjustment.
-   */
-  public apply(buffer: OptimizedBuffer): void {
-    // No need to process if brightness is 1 (no change)
-    if (this._brightness === 1.0) {
-      return
-    }
-
-    const matrix = this._createBrightnessMatrix(this._brightness)
-    buffer.colorMatrixUniform(matrix, 1.0)
-  }
-}
-
-/**
- * Adjusts the overall gain of the buffer using color matrix transformation.
- * Gain multiplies all RGB channels by the gain factor (no clamping).
- */
-export class GainEffect {
-  private _gain: number
-
-  constructor(gain: number = 1.0) {
-    this._gain = Math.max(0, gain)
-  }
-
-  public set gain(newGain: number) {
-    this._gain = Math.max(0, newGain)
-  }
-
-  public get gain(): number {
-    return this._gain
-  }
-
-  private _createGainMatrix(gain: number): Float32Array {
-    // Gain matrix: diagonal matrix with gain factor
-    // Multiplies all RGB channels by gain (no clamping)
-    const g = gain
-    return new Float32Array([
-      g,
-      0,
-      0, // Row 0 (Red output)
-      0,
-      g,
-      0, // Row 1 (Green output)
-      0,
-      0,
-      g, // Row 2 (Blue output)
-    ])
-  }
-
-  /**
-   * Applies the gain adjustment to the buffer using colorMatrixUniform.
-   */
-  public apply(buffer: OptimizedBuffer): void {
-    // No need to process if gain is 1 (no change)
-    if (this._gain === 1.0) {
-      return
-    }
-
-    const matrix = this._createGainMatrix(this._gain)
-    buffer.colorMatrixUniform(matrix, 1.0)
-  }
-}
-
-/**
- * Applies a brightness adjustment to the buffer using colorMatrixUniform.
+ * @param buffer - The buffer to apply the effect to
  * @param brightness - brightness factor: <1.0 darkens, 1.0 unchanged, >1.0 brightens
- * @param strength - strength multiplier (0.0 to 1.0)
- * Values are clamped to [0, 1] range after adjustment.
+ * @param triplets - Optional array of [x, y, strength] triplets for selective brightness.
+ *                   If not provided, applies uniform brightness to entire buffer.
  */
-export function applyBrightness(buffer: OptimizedBuffer, brightness: number = 1.0, strength: number = 1.0): void {
-  if (strength === 0 || brightness === 1.0) return
+export function brightness(buffer: OptimizedBuffer, brightness: number = 1.0, triplets?: Float32Array): void {
+  // No need to process if brightness is 1 (no change)
+  if (brightness === 1.0) return
 
-  // Create brightness matrix (diagonal with brightness factor)
-  const b = 1.0 + (brightness - 1.0) * strength
+  const b = Math.max(0, brightness)
   const matrix = new Float32Array([
     b,
     0,
@@ -245,7 +146,45 @@ export function applyBrightness(buffer: OptimizedBuffer, brightness: number = 1.
     b, // Row 2 (Blue output)
   ])
 
-  buffer.colorMatrixUniform(matrix, 1.0)
+  if (!triplets || triplets.length === 0) {
+    buffer.colorMatrixUniform(matrix, 1.0)
+  } else {
+    const tripletCount = Math.floor(triplets.length / 3)
+    buffer.colorMatrix(matrix, triplets, 1.0)
+  }
+}
+
+/**
+ * Adjusts the gain of the buffer using color matrix transformation.
+ * Gain multiplies all RGB channels by the gain factor (no clamping).
+ * @param buffer - The buffer to apply the effect to
+ * @param gain - gain factor: <1.0 reduces, 1.0 unchanged, >1.0 amplifies
+ * @param triplets - Optional array of [x, y, strength] triplets for selective gain.
+ *                   If not provided, applies uniform gain to entire buffer.
+ */
+export function gain(buffer: OptimizedBuffer, gain: number = 1.0, triplets?: Float32Array): void {
+  // No need to process if gain is 1 (no change)
+  if (gain === 1.0) return
+
+  const g = Math.max(0, gain)
+  const matrix = new Float32Array([
+    g,
+    0,
+    0, // Row 0 (Red output)
+    0,
+    g,
+    0, // Row 1 (Green output)
+    0,
+    0,
+    g, // Row 2 (Blue output)
+  ])
+
+  if (!triplets || triplets.length === 0) {
+    buffer.colorMatrixUniform(matrix, 1.0)
+  } else {
+    const tripletCount = Math.floor(triplets.length / 3)
+    buffer.colorMatrix(matrix, triplets, 1.0)
+  }
 }
 
 /**

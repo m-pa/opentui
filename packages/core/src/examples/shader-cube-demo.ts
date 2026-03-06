@@ -23,14 +23,7 @@ import {
   AmbientLight,
 } from "three"
 import * as Filters from "../post/filters"
-import {
-  DistortionEffect,
-  VignetteEffect,
-  BrightnessEffect,
-  BloomEffect,
-  GainEffect,
-  GrayscaleEffect,
-} from "../post/filters"
+import { DistortionEffect, VignetteEffect, BloomEffect, GrayscaleEffect } from "../post/filters"
 import * as Matrices from "../post/matrices"
 import type { OptimizedBuffer } from "../buffer"
 import { ThreeCliRenderer } from "../3d"
@@ -48,8 +41,8 @@ interface ShaderCubeDemoState {
   materials: MeshPhongMaterial[]
   distortionEffectInstance: DistortionEffect
   vignetteEffectInstance: VignetteEffect
-  brightnessEffectInstance: BrightnessEffect
-  gainEffectInstance: GainEffect
+  brightnessValue: number
+  gainValue: number
   bloomEffectInstance: BloomEffect
   saturationValue: number
   saturationTriplets: Float32Array | null
@@ -112,8 +105,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
   // Initialize effect instances
   const distortionEffectInstance = new DistortionEffect()
   const vignetteEffectInstance = new VignetteEffect()
-  const brightnessEffectInstance = new BrightnessEffect()
-  const gainEffectInstance = new GainEffect()
+
+  // Simple value-based brightness and gain (no class instances)
+  let brightnessValue = 1.0
+  let gainValue = 1.0
 
   // Helper function to create right-half triplets for selective saturation
   function createRightHalfTriplets(width: number, height: number): Float32Array {
@@ -191,8 +186,8 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "ASCII Art", func: (buf, _dt) => Filters.applyAsciiArt(buf) },
     { name: "Bloom", func: bloomEffectInstance.apply.bind(bloomEffectInstance) },
     { name: "Distortion", func: distortionEffectInstance.apply.bind(distortionEffectInstance) },
-    { name: "Brightness", func: brightnessEffectInstance.apply.bind(brightnessEffectInstance) },
-    { name: "Gain", func: gainEffectInstance.apply.bind(gainEffectInstance) },
+    { name: "Brightness", func: (buf, _dt) => Filters.brightness(buf, brightnessValue) },
+    { name: "Gain", func: (buf, _dt) => Filters.gain(buf, gainValue) },
     { name: "Saturation", func: (buf, _dt) => buf.saturate(saturationValue, saturationTriplets ?? undefined) },
   ]
 
@@ -469,11 +464,11 @@ export async function run(renderer: CliRenderer): Promise<void> {
         param1Visible = true
         break
       case "Brightness":
-        param1Text = `Brightness Factor: ${brightnessEffectInstance.brightness.toFixed(2)} ([/])`
+        param1Text = `Brightness Factor: ${brightnessValue.toFixed(2)} ([/])`
         param1Visible = true
         break
       case "Gain":
-        param1Text = `Gain Factor: ${gainEffectInstance.gain.toFixed(2)} ([/])`
+        param1Text = `Gain Factor: ${gainValue.toFixed(2)} ([/])`
         param1Visible = true
         break
       case "Bloom":
@@ -661,11 +656,11 @@ export async function run(renderer: CliRenderer): Promise<void> {
           paramChanged = true
           break
         case "Brightness":
-          brightnessEffectInstance.brightness = Math.max(0, brightnessEffectInstance.brightness - 0.05)
+          brightnessValue = Math.max(0, brightnessValue - 0.05)
           paramChanged = true
           break
         case "Gain":
-          gainEffectInstance.gain = Math.max(0, gainEffectInstance.gain - 0.05)
+          gainValue = Math.max(0, gainValue - 0.05)
           paramChanged = true
           break
         case "Bloom":
@@ -695,11 +690,11 @@ export async function run(renderer: CliRenderer): Promise<void> {
           paramChanged = true
           break
         case "Brightness":
-          brightnessEffectInstance.brightness = Math.min(50, brightnessEffectInstance.brightness + 0.05)
+          brightnessValue = Math.min(50, brightnessValue + 0.05)
           paramChanged = true
           break
         case "Gain":
-          gainEffectInstance.gain = Math.min(50, gainEffectInstance.gain + 0.05)
+          gainValue = Math.min(50, gainValue + 0.05)
           paramChanged = true
           break
         case "Bloom":
@@ -822,8 +817,8 @@ export async function run(renderer: CliRenderer): Promise<void> {
     materials,
     distortionEffectInstance,
     vignetteEffectInstance,
-    brightnessEffectInstance,
-    gainEffectInstance,
+    brightnessValue,
+    gainValue,
     bloomEffectInstance,
     saturationValue,
     saturationTriplets,
