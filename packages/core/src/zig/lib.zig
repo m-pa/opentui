@@ -425,17 +425,6 @@ export fn bufferBrightnessUniform(bufferPtr: *buffer.OptimizedBuffer, brightness
     bufferPtr.brightnessUniform(brightness, strength);
 }
 
-export fn bufferSaturate(bufferPtr: *buffer.OptimizedBuffer, tripletsPtr: [*]const f32, tripletCount: usize, strength: f32) void {
-    if (tripletCount == 0) return;
-    const len = tripletCount * 3;
-    const triplets = tripletsPtr[0..len];
-    bufferPtr.saturate(triplets, strength);
-}
-
-export fn bufferSaturateUniform(bufferPtr: *buffer.OptimizedBuffer, saturation: f32, strength: f32) void {
-    bufferPtr.saturateUniform(saturation, strength);
-}
-
 export fn bufferColorMatrix(bufferPtr: *buffer.OptimizedBuffer, matrixPtr: [*]const f32, tripletsPtr: [*]const f32, tripletCount: usize) void {
     if (tripletCount == 0) return;
     const matrix = matrixPtr[0..9];

@@ -574,13 +574,44 @@ export function applyBrightness(buffer: OptimizedBuffer, brightness: number = 1.
 }
 
 /**
- * Adjusts the overall saturation of the buffer using the native saturate method.
+ * Generates a saturation color matrix.
+ * @param saturation - 0.0 = grayscale, 1.0 = unchanged
+ * @returns 3x3 color matrix as Float32Array
+ */
+function createSaturationMatrix(saturation: number): Float32Array {
+  const s = Math.max(0, saturation)
+  const sr = 0.299 * (1 - s)
+  const sg = 0.587 * (1 - s)
+  const sb = 0.114 * (1 - s)
+
+  // Row 0 (Red output)
+  const m00 = sr + s // 0.299 + 0.701*s
+  const m01 = sg // 0.587 * (1 - s)
+  const m02 = sb // 0.114 * (1 - s)
+
+  // Row 1 (Green output)
+  const m10 = sr // 0.299 * (1 - s)
+  const m11 = sg + s // 0.587 + 0.413*s
+  const m12 = sb // 0.114 * (1 - s)
+
+  // Row 2 (Blue output)
+  const m20 = sr // 0.299 * (1 - s)
+  const m21 = sg // 0.587 * (1 - s)
+  const m22 = sb + s // 0.114 + 0.886*s
+
+  return new Float32Array([m00, m01, m02, m10, m11, m12, m20, m21, m22])
+}
+
+/**
+ * Adjusts the overall saturation of the buffer using the native colorMatrix method.
  */
 export class SaturationEffect {
   private _saturation: number
   private _cachedSaturation: number
-  // Stores packed triplets [x, y, saturation] per pixel
-  private precomputedSaturationTriplets: Float32Array | null = null
+  // Stores the color matrix for the current saturation
+  private saturationMatrix: Float32Array
+  // Stores packed triplets [x, y, strength] per pixel
+  private precomputedTriplets: Float32Array | null = null
   private cachedWidth: number = -1
   private cachedHeight: number = -1
   // Optional initial triplets to use for selective saturation
@@ -591,14 +622,17 @@ export class SaturationEffect {
   constructor(saturation: number = 1.0, initialTriplets?: Float32Array) {
     this._saturation = Math.max(0, saturation)
     this._cachedSaturation = this._saturation
+    this.saturationMatrix = createSaturationMatrix(this._saturation)
     if (initialTriplets) {
       this.initialTriplets = initialTriplets
-      this.precomputedSaturationTriplets = initialTriplets
+      this.precomputedTriplets = initialTriplets
     }
   }
 
   public set saturation(newSaturation: number) {
     this._saturation = Math.max(0, newSaturation)
+    // Update matrix when saturation changes
+    this.saturationMatrix = createSaturationMatrix(this._saturation)
   }
 
   public get saturation(): number {
@@ -611,14 +645,14 @@ export class SaturationEffect {
    */
   public setTriplets(triplets: Float32Array | null): void {
     this.initialTriplets = triplets
-    this.precomputedSaturationTriplets = triplets
+    this.precomputedTriplets = triplets
     // Flag for recompute on next apply
     this.shouldRecompute = true
   }
 
-  private _computeFactors(width: number, height: number): void {
+  private _computeTriplets(width: number, height: number): void {
     // initialTriplets must be provided to reach this method
-    this.precomputedSaturationTriplets = this.initialTriplets
+    this.precomputedTriplets = this.initialTriplets
     this.cachedWidth = width
     this.cachedHeight = height
     this._cachedSaturation = this._saturation
@@ -626,8 +660,8 @@ export class SaturationEffect {
   }
 
   /**
-   * Applies the saturation adjustment to the buffer using the native saturate method.
-   * Uses saturateUniform for uniform saturation when no triplets provided.
+   * Applies the saturation adjustment to the buffer using the native colorMatrix method.
+   * Uses colorMatrixUniform for uniform saturation when no triplets provided.
    */
   public apply(buffer: OptimizedBuffer): void {
     const width = buffer.width
@@ -640,39 +674,71 @@ export class SaturationEffect {
 
     // If no triplets provided, use uniform saturation (much faster)
     if (!this.initialTriplets) {
-      // Pass saturation as strength parameter (defaults to full strength=1.0)
-      buffer.saturateUniform(this._saturation, 1.0)
+      buffer.colorMatrixUniform(this.saturationMatrix, 1.0)
       return
     }
 
-    // Recompute saturation triplets if dimensions changed, saturation changed, flagged for recompute, or factors haven't been computed yet
+    // Recompute triplets if dimensions changed, saturation changed, flagged for recompute, or factors haven't been computed yet
     if (
       this.shouldRecompute ||
       width !== this.cachedWidth ||
       height !== this.cachedHeight ||
       this._saturation !== this._cachedSaturation ||
-      !this.precomputedSaturationTriplets
+      !this.precomputedTriplets
     ) {
-      this._computeFactors(width, height)
+      this._computeTriplets(width, height)
+      // Update matrix in case saturation changed
+      this.saturationMatrix = createSaturationMatrix(this._saturation)
     }
 
-    buffer.saturate(this.precomputedSaturationTriplets!, this._saturation)
+    buffer.colorMatrix(this.saturationMatrix, this.precomputedTriplets!, 1.0)
   }
 }
 
 /**
- * Converts the buffer colors to grayscale using native saturateUniform (saturation=0).
+ * Converts the buffer colors to grayscale using native colorMatrixUniform.
  * Much faster than SaturationEffect as it skips triplet creation and iteration.
  */
 export class GrayscaleEffect {
   private _strength: number
+  private grayscaleMatrix: Float32Array
 
   constructor(strength: number = 1.0) {
     this._strength = Math.max(0, Math.min(1, strength))
+    this.grayscaleMatrix = this._createGrayscaleMatrix(this._strength)
+  }
+
+  private _createGrayscaleMatrix(strength: number): Float32Array {
+    // Grayscale matrix: each output channel is the luminance
+    const s = strength
+    const t = 1 - s // To blend with identity matrix
+
+    // Blend identity with grayscale matrix based on strength
+    // For full strength (s=1): pure grayscale
+    // For no strength (s=0): identity matrix (no change)
+
+    // m00 = t*1 + s*0.299, m01 = s*0.587, m02 = s*0.114
+    // m10 = s*0.299, m11 = t*1 + s*0.587, m12 = s*0.114
+    // m20 = s*0.299, m21 = s*0.587, m22 = t*1 + s*0.114
+
+    const m00 = t + s * 0.299
+    const m01 = s * 0.587
+    const m02 = s * 0.114
+
+    const m10 = s * 0.299
+    const m11 = t + s * 0.587
+    const m12 = s * 0.114
+
+    const m20 = s * 0.299
+    const m21 = s * 0.587
+    const m22 = t + s * 0.114
+
+    return new Float32Array([m00, m01, m02, m10, m11, m12, m20, m21, m22])
   }
 
   public set strength(newStrength: number) {
     this._strength = Math.max(0, Math.min(1, newStrength))
+    this.grayscaleMatrix = this._createGrayscaleMatrix(this._strength)
   }
 
   public get strength(): number {
@@ -680,11 +746,14 @@ export class GrayscaleEffect {
   }
 
   /**
-   * Applies the grayscale effect using native saturateUniform.
+   * Applies the grayscale effect using native colorMatrixUniform.
    */
   public apply(buffer: OptimizedBuffer): void {
-    // saturation=0 for grayscale, with strength controlling intensity
-    buffer.saturateUniform(0, this._strength)
+    // Skip if no effect
+    if (this._strength === 0) {
+      return
+    }
+    buffer.colorMatrixUniform(this.grayscaleMatrix, 1.0)
   }
 }
 

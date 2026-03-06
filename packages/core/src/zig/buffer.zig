@@ -611,14 +611,6 @@ pub const OptimizedBuffer = struct {
         buffer_effects.attenuate(self, triplets, strength);
     }
 
-    pub fn saturate(self: *OptimizedBuffer, triplets: []const f32, strength: f32) void {
-        buffer_effects.saturate(self, triplets, strength);
-    }
-
-    pub fn saturateUniform(self: *OptimizedBuffer, saturation: f32, strength: f32) void {
-        buffer_effects.saturateUniform(self, saturation, strength);
-    }
-
     pub fn colorMatrix(self: *OptimizedBuffer, matrix: []const f32, triplets: []const f32) void {
         buffer_effects.colorMatrix(self, matrix, triplets);
     }

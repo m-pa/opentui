@@ -638,7 +638,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     if (key.name === "t" && filterFunctions[currentFilterIndex].name === "Saturation") {
       saturationFullScreen = !saturationFullScreen
       if (saturationFullScreen) {
-        // null triplets = uniform saturation (uses saturateUniform, much faster)
+        // null triplets = uniform saturation (uses colorMatrixUniform, much faster)
         saturationEffectInstance.setTriplets(null)
       } else {
         // triplets = selective saturation on right half

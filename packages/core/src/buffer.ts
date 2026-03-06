@@ -277,23 +277,6 @@ export class OptimizedBuffer {
     this.lib.bufferBrightnessUniform(this.bufferPtr, brightness, strength)
   }
 
-  public saturate(cells: Float32Array, strength: number = 1): void {
-    this.guard()
-    if (strength === 1.0 || cells.length === 0) return
-
-    const tripletCount = Math.floor(cells.length / 3)
-    if (tripletCount === 0) return
-    this.lib.bufferSaturate(this.bufferPtr, ptr(cells), tripletCount, strength)
-    return
-  }
-
-  public saturateUniform(saturation: number, strength: number = 1): void {
-    this.guard()
-    // No need to process if strength is 0 or saturation is 1 (no change)
-    if (strength === 0 || saturation === 1.0) return
-    this.lib.bufferSaturateUniform(this.bufferPtr, saturation, strength)
-  }
-
   /**
    * Apply a 3x3 color matrix transformation to the buffer.
    * @param matrix - 9 values representing a 3x3 matrix in row-major order [m00, m01, m02, m10, m11, m12, m20, m21, m22]
