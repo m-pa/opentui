@@ -664,3 +664,177 @@ export class FlamesEffect {
     }
   }
 }
+
+/**
+ * Applies animated rainbow colors to cells with white foreground.
+ * Cycles through HSV hue spectrum over time.
+ */
+export class RainbowTextEffect {
+  private _speed: number
+  private _saturation: number
+  private _value: number
+  private _repeats: number
+  private time: number = 0
+
+  constructor(speed: number = 0.01, saturation: number = 1.0, value: number = 1.0, repeats: number = 3.0) {
+    this._speed = speed
+    this._saturation = saturation
+    this._value = value
+    this._repeats = repeats
+  }
+
+  public set speed(newSpeed: number) {
+    this._speed = Math.max(0, newSpeed)
+  }
+  public get speed(): number {
+    return this._speed
+  }
+
+  public set saturation(newSaturation: number) {
+    this._saturation = Math.max(0, Math.min(1, newSaturation))
+  }
+  public get saturation(): number {
+    return this._saturation
+  }
+
+  public set value(newValue: number) {
+    this._value = Math.max(0, Math.min(1, newValue))
+  }
+  public get value(): number {
+    return this._value
+  }
+
+  public set repeats(newRepeats: number) {
+    this._repeats = Math.max(0.1, newRepeats)
+  }
+  public get repeats(): number {
+    return this._repeats
+  }
+
+  public set speed(newSpeed: number) {
+    this._speed = Math.max(0, newSpeed)
+  }
+  public get speed(): number {
+    return this._speed
+  }
+
+  public set saturation(newSaturation: number) {
+    this._saturation = Math.max(0, Math.min(1, newSaturation))
+  }
+  public get saturation(): number {
+    return this._saturation
+  }
+
+  public set value(newValue: number) {
+    this._value = Math.max(0, Math.min(1, newValue))
+  }
+  public get value(): number {
+    return this._value
+  }
+
+  /**
+   * Converts HSV color to RGB
+   * @param h - Hue [0, 1]
+   * @param s - Saturation [0, 1]
+   * @param v - Value [0, 1]
+   * @returns [r, g, b] each in [0, 1]
+   */
+  private hsvToRgb(h: number, s: number, v: number): [number, number, number] {
+    let r = 0,
+      g = 0,
+      b = 0
+
+    const i = Math.floor(h * 6)
+    const f = h * 6 - i
+    const p = v * (1 - s)
+    const q = v * (1 - f * s)
+    const t = v * (1 - (1 - f) * s)
+
+    switch (i % 6) {
+      case 0:
+        r = v
+        g = t
+        b = p
+        break
+      case 1:
+        r = q
+        g = v
+        b = p
+        break
+      case 2:
+        r = p
+        g = v
+        b = t
+        break
+      case 3:
+        r = p
+        g = q
+        b = v
+        break
+      case 4:
+        r = t
+        g = p
+        b = v
+        break
+      case 5:
+        r = v
+        g = p
+        b = q
+        break
+    }
+
+    return [r, g, b]
+  }
+
+  /**
+   * Applies rainbow colors to cells with white foreground.
+   * White is defined as R, G, B all >= 0.9
+   */
+  public apply(buffer: OptimizedBuffer, deltaTime: number): void {
+    const width = buffer.width
+    const height = buffer.height
+    const fg = buffer.buffers.fg
+
+    // Update time for animation
+    this.time += deltaTime * this._speed
+
+    const saturation = this._saturation
+    const value = this._value
+    const repeats = this._repeats
+
+    // 25 degree angle for diagonal rainbow
+    const angleRad = (25 * Math.PI) / 180
+    const cosAngle = Math.cos(angleRad)
+    const sinAngle = Math.sin(angleRad)
+
+    // Define white threshold
+    const whiteThreshold = 0.9
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const colorIndex = (y * width + x) * 4
+
+        const r = fg[colorIndex]
+        const g = fg[colorIndex + 1]
+        const b = fg[colorIndex + 2]
+
+        // Check if foreground is white-ish (all components >= threshold)
+        if (r >= whiteThreshold && g >= whiteThreshold && b >= whiteThreshold) {
+          // Calculate hue based on position projected at 25-degree angle
+          // Creates a diagonal moving rainbow wave effect
+          const projection = x * cosAngle + y * sinAngle
+          const maxProjection = width * cosAngle + height * sinAngle
+          const hue = ((projection / maxProjection) * repeats + this.time * 0.1) % 1.0
+
+          // Convert HSV to RGB
+          const [newR, newG, newB] = this.hsvToRgb(hue, saturation, value)
+
+          fg[colorIndex] = newR
+          fg[colorIndex + 1] = newG
+          fg[colorIndex + 2] = newB
+          // Keep alpha unchanged
+        }
+      }
+    }
+  }
+}
