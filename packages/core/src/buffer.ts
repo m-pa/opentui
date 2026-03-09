@@ -5,7 +5,7 @@ import { type BorderStyle, type BorderSides, BorderCharArrays, parseBorderStyle 
 import { type WidthMethod, type CapturedSpan, type CapturedLine } from "./types"
 import type { TextBufferView } from "./text-buffer-view"
 import type { EditorView } from "./editor-view"
-import { saturate } from "./post/filters"
+import { saturate, brightness, gain } from "./post/filters"
 
 // Pack drawing options into a single u32
 // bits 0-3: borderSides, bit 4: shouldFill, bits 5-6: titleAlignment
@@ -569,64 +569,26 @@ export class OptimizedBuffer {
 
   /**
    * Apply a brightness adjustment to the buffer using a color matrix.
-   * @param brightness - brightness factor: <1.0 darkens, 1.0 unchanged, >1.0 brightens
+   * @param brightnessValue - brightness factor: <1.0 darkens, 1.0 unchanged, >1.0 brightens
    * @param cellMask - Optional array of [x, y, strength] cell masks for selective brightness.
    *                   If not provided, applies uniform brightness to entire buffer.
    */
-  public brightness(brightness: number = 1.0, cellMask?: Float32Array): void {
+  public brightness(brightnessValue: number = 1.0, cellMask?: Float32Array): void {
     this.guard()
-    if (brightness === 1.0) return
-
-    const b = Math.max(0, brightness)
-    const matrix = new Float32Array([
-      b,
-      0,
-      0, // Row 0 (Red output)
-      0,
-      b,
-      0, // Row 1 (Green output)
-      0,
-      0,
-      b, // Row 2 (Blue output)
-    ])
-
-    if (!cellMask || cellMask.length === 0) {
-      this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrix), 1.0)
-    } else {
-      const cellMaskCount = Math.floor(cellMask.length / 3)
-      this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(cellMask), cellMaskCount, 1.0)
-    }
+    if (brightnessValue === 1.0) return
+    brightness(this, brightnessValue, cellMask)
   }
 
   /**
    * Apply a gain adjustment to the buffer using a color matrix.
-   * @param gain - gain factor: <1.0 reduces, 1.0 unchanged, >1.0 amplifies
+   * @param gainValue - gain factor: <1.0 reduces, 1.0 unchanged, >1.0 amplifies
    * @param cellMask - Optional array of [x, y, strength] cell masks for selective gain.
    *                   If not provided, applies uniform gain to entire buffer.
    */
-  public gain(gain: number = 1.0, cellMask?: Float32Array): void {
+  public gain(gainValue: number = 1.0, cellMask?: Float32Array): void {
     this.guard()
-    if (gain === 1.0) return
-
-    const g = Math.max(0, gain)
-    const matrix = new Float32Array([
-      g,
-      0,
-      0, // Row 0 (Red output)
-      0,
-      g,
-      0, // Row 1 (Green output)
-      0,
-      0,
-      g, // Row 2 (Blue output)
-    ])
-
-    if (!cellMask || cellMask.length === 0) {
-      this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrix), 1.0)
-    } else {
-      const cellMaskCount = Math.floor(cellMask.length / 3)
-      this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(cellMask), cellMaskCount, 1.0)
-    }
+    if (gainValue === 1.0) return
+    gain(this, gainValue, cellMask)
   }
 
   /**
