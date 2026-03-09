@@ -262,15 +262,8 @@ export class OptimizedBuffer {
       cellMaskArray = new Float32Array(cellMask)
     }
 
-    // Apply strength to each cell mask entry
-    if (strength !== 1.0) {
-      for (let i = 2; i < cellMaskArray.length; i += 3) {
-        cellMaskArray[i] *= strength
-      }
-    }
-
     const cellMaskCount = Math.floor(cellMaskArray.length / 3)
-    this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrixArray), ptr(cellMaskArray), cellMaskCount)
+    this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrixArray), ptr(cellMaskArray), cellMaskCount, strength)
   }
 
   /**
@@ -593,7 +586,7 @@ export class OptimizedBuffer {
       this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrix), 1.0)
     } else {
       const cellMaskCount = Math.floor(cellMask.length / 3)
-      this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(cellMask), cellMaskCount)
+      this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(cellMask), cellMaskCount, 1.0)
     }
   }
 
@@ -624,7 +617,7 @@ export class OptimizedBuffer {
       this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrix), 1.0)
     } else {
       const cellMaskCount = Math.floor(cellMask.length / 3)
-      this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(cellMask), cellMaskCount)
+      this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(cellMask), cellMaskCount, 1.0)
     }
   }
 
@@ -642,7 +635,7 @@ export class OptimizedBuffer {
       this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrix), 1.0)
     } else {
       const cellMaskCount = Math.floor(cellMask.length / 3)
-      this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(cellMask), cellMaskCount)
+      this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(cellMask), cellMaskCount, 1.0)
     }
   }
 
