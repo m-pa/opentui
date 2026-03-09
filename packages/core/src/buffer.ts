@@ -5,6 +5,7 @@ import { type BorderStyle, type BorderSides, BorderCharArrays, parseBorderStyle 
 import { type WidthMethod, type CapturedSpan, type CapturedLine } from "./types"
 import type { TextBufferView } from "./text-buffer-view"
 import type { EditorView } from "./editor-view"
+import { saturate } from "./post/filters"
 
 // Pack drawing options into a single u32
 // bits 0-3: borderSides, bit 4: shouldFill, bits 5-6: titleAlignment
@@ -637,36 +638,6 @@ export class OptimizedBuffer {
   public saturate(saturation: number = 1.0, cellMask?: Float32Array): void {
     this.guard()
     if (saturation === 1.0) return
-    const matrix = this.createSaturationMatrix(saturation)
-    if (!cellMask || cellMask.length === 0) {
-      this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrix), 1.0)
-    } else {
-      const cellMaskCount = Math.floor(cellMask.length / 3)
-      this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(cellMask), cellMaskCount, 1.0)
-    }
-  }
-
-  private createSaturationMatrix(saturation: number): Float32Array {
-    const s = Math.max(0, saturation)
-    const sr = 0.299 * (1 - s)
-    const sg = 0.587 * (1 - s)
-    const sb = 0.114 * (1 - s)
-
-    // Row 0 (Red output)
-    const m00 = sr + s
-    const m01 = sg
-    const m02 = sb
-
-    // Row 1 (Green output)
-    const m10 = sr
-    const m11 = sg + s
-    const m12 = sb
-
-    // Row 2 (Blue output)
-    const m20 = sr
-    const m21 = sg
-    const m22 = sb + s
-
-    return new Float32Array([m00, m01, m02, m10, m11, m12, m20, m21, m22])
+    saturate(this, cellMask, saturation)
   }
 }
