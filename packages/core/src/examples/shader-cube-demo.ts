@@ -103,7 +103,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
   const vignetteEffectInstance = new VignetteEffect()
 
   // Simple value-based brightness and gain (no class instances)
-  let brightnessValue = 1.0
+  let brightnessValue = 0.0
   let gainValue = 1.0
 
   // Helper function to create right-half cell masks for selective saturation
@@ -181,9 +181,12 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Chromatic Aberration", func: (buf, _dt) => Filters.applyChromaticAberration(buf, 2) },
     { name: "ASCII Art", func: (buf, _dt) => Filters.applyAsciiArt(buf) },
     { name: "Distortion", func: distortionEffectInstance.apply.bind(distortionEffectInstance) },
-    { name: "Brightness", func: (buf, _dt) => Filters.brightness(buf, brightnessValue) },
-    { name: "Gain", func: (buf, _dt) => Filters.gain(buf, gainValue) },
-    { name: "Saturation", func: (buf, _dt) => Filters.saturate(buf, saturationCellMask ?? undefined, saturationValue) },
+    { name: "Brightness", func: (buf, _dt) => Filters.applyBrightness(buf, brightnessValue) },
+    { name: "Gain", func: (buf, _dt) => Filters.applyGain(buf, gainValue) },
+    {
+      name: "Saturation",
+      func: (buf, _dt) => Filters.applySaturation(buf, saturationCellMask ?? undefined, saturationValue),
+    },
   ]
 
   // Box in the background to show alpha channel works
@@ -646,7 +649,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
           paramChanged = true
           break
         case "Brightness":
-          brightnessValue = Math.max(0, brightnessValue - 0.05)
+          brightnessValue = Math.max(-1.0, brightnessValue - 0.05)
           paramChanged = true
           break
         case "Gain":
@@ -676,7 +679,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
           paramChanged = true
           break
         case "Brightness":
-          brightnessValue = Math.min(50, brightnessValue + 0.05)
+          brightnessValue = Math.min(1.0, brightnessValue + 0.05)
           paramChanged = true
           break
         case "Gain":

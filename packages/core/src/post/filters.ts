@@ -156,40 +156,40 @@ export function applyAsciiArt(buffer: OptimizedBuffer, ramp: string = " .:-=+*#%
 
 /**
  * Adjusts the brightness of the buffer using color matrix transformation.
- * Brightness multiplies all RGB channels by the brightness factor with clamping to [0, 1].
+ * Brightness adds the brightness value to all RGB channels (additive brightness).
  * @param buffer - The buffer to apply the effect to
- * @param brightness - brightness factor: <1.0 darkens, 1.0 unchanged, >1.0 brightens
+ * @param brightness - brightness offset: <0.0 darkens, 0.0 unchanged, >0.0 brightens
  * @param cellMask - Optional array of [x, y, strength] cell masks for selective brightness.
  *                   If not provided, applies uniform brightness to entire buffer.
  */
-export function brightness(buffer: OptimizedBuffer, brightness: number = 1.0, cellMask?: Float32Array): void {
-  // No need to process if brightness is 1 (no change)
-  if (brightness === 1.0) return
+export function applyBrightness(buffer: OptimizedBuffer, brightness: number = 0.0, cellMask?: Float32Array): void {
+  // No need to process if brightness is 0 (no change)
+  if (brightness === 0.0) return
 
-  const b = Math.max(0, brightness)
+  const b = brightness
+  // Additive brightness matrix: adds brightness to all channels via alpha column
   const matrix = new Float32Array([
-    b,
+    1,
     0,
     0,
-    0, // Row 0 (Red output)
+    b, // Row 0 (Red output = R + brightness*A)
     0,
-    b,
+    1,
     0,
-    0, // Row 1 (Green output)
-    0,
-    0,
-    b,
-    0, // Row 2 (Blue output)
+    b, // Row 1 (Green output = G + brightness*A)
     0,
     0,
+    1,
+    b, // Row 2 (Blue output = B + brightness*A)
     0,
-    1, // Row 3 (Alpha output - identity)
+    0,
+    0,
+    1, // Row 3 (Alpha output = A)
   ])
 
   if (!cellMask || cellMask.length === 0) {
     buffer.colorMatrixUniform(matrix, 1.0)
   } else {
-    const cellMaskCount = Math.floor(cellMask.length / 3)
     buffer.colorMatrix(matrix, cellMask, 1.0)
   }
 }
@@ -202,7 +202,7 @@ export function brightness(buffer: OptimizedBuffer, brightness: number = 1.0, ce
  * @param cellMask - Optional array of [x, y, strength] cell masks for selective gain.
  *                   If not provided, applies uniform gain to entire buffer.
  */
-export function gain(buffer: OptimizedBuffer, gain: number = 1.0, cellMask?: Float32Array): void {
+export function applyGain(buffer: OptimizedBuffer, gain: number = 1.0, cellMask?: Float32Array): void {
   // No need to process if gain is 1 (no change)
   if (gain === 1.0) return
 
@@ -288,7 +288,7 @@ function createSaturationMatrix(saturation: number): Float32Array {
  *                   If not provided, applies uniform saturation to entire buffer.
  * @param strength - Saturation factor: 0.0 = grayscale, 1.0 = unchanged, >1.0 = oversaturated
  */
-export function saturate(buffer: OptimizedBuffer, cellMask?: Float32Array, strength: number = 1.0): void {
+export function applySaturation(buffer: OptimizedBuffer, cellMask?: Float32Array, strength: number = 1.0): void {
   // No need to process if saturation is 1 (no change) or strength is 0
   if (strength === 1.0 || strength === 0) {
     return
