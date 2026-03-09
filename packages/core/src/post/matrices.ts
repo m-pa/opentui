@@ -246,3 +246,43 @@ export const GREENSCALE_MATRIX = new Float32Array([
   0,
   1, // Alpha output - identity
 ])
+
+// Grayscale effect - converts image to monochrome gray using luminance weights
+export const GRAYSCALE_MATRIX = new Float32Array([
+  0.299,
+  0.587,
+  0.114,
+  0, // Red output - luminance from all channels
+  0.299,
+  0.587,
+  0.114,
+  0, // Green output - luminance from all channels
+  0.299,
+  0.587,
+  0.114,
+  0, // Blue output - luminance from all channels
+  0,
+  0,
+  0,
+  1, // Alpha output - identity
+])
+
+// Invert effect - inverts all color channels (photographic negative)
+export const INVERT_MATRIX = new Float32Array([
+  -1,
+  0,
+  0,
+  1, // Red output = 1 - R
+  0,
+  -1,
+  0,
+  1, // Green output = 1 - G
+  0,
+  0,
+  -1,
+  1, // Blue output = 1 - B
+  0,
+  0,
+  0,
+  1, // Alpha output - identity
+])

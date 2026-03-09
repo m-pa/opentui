@@ -23,14 +23,7 @@ import {
   AmbientLight,
 } from "three"
 import * as Filters from "../post/filters"
-import {
-  DistortionEffect,
-  VignetteEffect,
-  GrayscaleEffect,
-  CloudsEffect,
-  FlamesEffect,
-  RainbowTextEffect,
-} from "../post/filters"
+import { DistortionEffect, VignetteEffect, CloudsEffect, FlamesEffect, RainbowTextEffect } from "../post/filters"
 import * as Matrices from "../post/matrices"
 import type { OptimizedBuffer } from "../buffer"
 import { ThreeCliRenderer } from "../3d"
@@ -53,7 +46,6 @@ interface ShaderCubeDemoState {
   rainbowTextEffectInstance: RainbowTextEffect
   brightnessValue: number
   gainValue: number
-  grayscaleEffectInstance: GrayscaleEffect
   colorMatrixEffectInstance: ColorMatrixEffect
   filterFunctions: { name: string; func: ((buffer: OptimizedBuffer, deltaTime: number) => void) | null }[]
   currentFilterIndex: number
@@ -142,8 +134,6 @@ export async function run(renderer: CliRenderer): Promise<void> {
   let saturationValue = 1.0
   let saturationCellMask: Float32Array | null = createRightHalfCellMask(WIDTH, HEIGHT)
 
-  const grayscaleEffectInstance = new GrayscaleEffect()
-
   // Registry of all available color matrices with their display names
   const colorMatrixRegistry: { name: string; matrix: Float32Array }[] = [
     { name: "Sepia", matrix: Matrices.SEPIA_MATRIX },
@@ -159,6 +149,8 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Solarization", matrix: Matrices.SOLARIZATION_MATRIX },
     { name: "Synthwave", matrix: Matrices.SYNTHWAVE_MATRIX },
     { name: "Greenscale", matrix: Matrices.GREENSCALE_MATRIX },
+    { name: "Grayscale", matrix: Matrices.GRAYSCALE_MATRIX },
+    { name: "Invert", matrix: Matrices.INVERT_MATRIX },
   ]
 
   // ColorMatrix effect that can cycle through all matrices
@@ -189,9 +181,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "None", func: null },
     { name: "Scanlines", func: (buf, _dt) => Filters.applyScanlines(buf, 0.85) },
     { name: "Vignette", func: vignetteEffectInstance.apply.bind(vignetteEffectInstance) },
-    { name: "Grayscale", func: grayscaleEffectInstance.apply.bind(grayscaleEffectInstance) },
     { name: "Color Matrix", func: colorMatrixEffectInstance.apply.bind(colorMatrixEffectInstance) },
-    { name: "Invert", func: (buf, _dt) => Filters.applyInvert(buf) },
     { name: "Noise", func: (buf, _dt) => Filters.applyNoise(buf, 0.05) },
     { name: "Chromatic Aberration", func: (buf, _dt) => Filters.applyChromaticAberration(buf, 2) },
     { name: "ASCII Art", func: (buf, _dt) => Filters.applyAsciiArt(buf) },
@@ -889,7 +879,6 @@ export async function run(renderer: CliRenderer): Promise<void> {
     rainbowTextEffectInstance,
     brightnessValue,
     gainValue,
-    grayscaleEffectInstance,
     colorMatrixEffectInstance,
     filterFunctions,
     currentFilterIndex,
