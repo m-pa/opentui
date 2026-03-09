@@ -672,6 +672,111 @@ export class FlamesEffect {
 }
 
 /**
+ * Applies a CRT rolling bar effect - a horizontal bar that slowly scans down the screen.
+ * Simulates the classic CRT monitor rolling bar artifact.
+ */
+export class CRTRollingBarEffect {
+  private _speed: number
+  private _height: number
+  private _intensity: number
+  private _fadeDistance: number
+  private position: number = 0
+
+  constructor(speed: number = 0.5, height: number = 0.15, intensity: number = 0.3, fadeDistance: number = 0.3) {
+    this._speed = speed
+    this._height = Math.max(0.01, Math.min(0.5, height))
+    this._intensity = Math.max(0, Math.min(1, intensity))
+    this._fadeDistance = Math.max(0, Math.min(1, fadeDistance))
+  }
+
+  public set speed(newSpeed: number) {
+    this._speed = newSpeed
+  }
+  public get speed(): number {
+    return this._speed
+  }
+
+  public set height(newHeight: number) {
+    this._height = Math.max(0.01, Math.min(0.5, newHeight))
+  }
+  public get height(): number {
+    return this._height
+  }
+
+  public set intensity(newIntensity: number) {
+    this._intensity = Math.max(0, Math.min(1, newIntensity))
+  }
+  public get intensity(): number {
+    return this._intensity
+  }
+
+  public set fadeDistance(newFadeDistance: number) {
+    this._fadeDistance = Math.max(0, Math.min(1, newFadeDistance))
+  }
+  public get fadeDistance(): number {
+    return this._fadeDistance
+  }
+
+  /**
+   * Applies the rolling bar effect to the buffer.
+   * Creates a smooth horizontal bar that scans down the screen with a bell-curve gradient.
+   * The bar has a bright center that smoothly fades to the edges.
+   */
+  public apply(buffer: OptimizedBuffer, deltaTime: number): void {
+    const width = buffer.width
+    const height = buffer.height
+    const fg = buffer.buffers.fg
+    const bg = buffer.buffers.bg
+
+    // Update bar position (convert deltaTime from ms to seconds)
+    this.position += (deltaTime / 1000) * this._speed
+    // Wrap position to keep it rolling continuously
+    const cycleHeight = height + this._height * height * 2
+    this.position = this.position % cycleHeight
+
+    const barPixelHeight = this._height * height
+    const fadePixelDistance = this._fadeDistance * barPixelHeight
+    const totalEffectHeight = barPixelHeight + fadePixelDistance * 2
+    const effectCenter = this.position - totalEffectHeight / 2 + barPixelHeight / 2
+
+    for (let y = 0; y < height; y++) {
+      // Calculate distance from the bar center
+      const distFromCenter = Math.abs(y - effectCenter)
+
+      // Create a smooth bell-curve effect
+      // Full intensity at center, smooth falloff using Gaussian-like curve
+      let barFactor = 0
+
+      if (distFromCenter <= totalEffectHeight / 2) {
+        // Normalize distance to 0-1 range across the whole effect
+        const normalizedDist = distFromCenter / (totalEffectHeight / 2)
+        // Cosine falloff: 1 at center, 0 at edge
+        // cos(0) = 1, cos(π/2) = 0
+        barFactor = Math.cos((normalizedDist * Math.PI) / 2)
+      }
+
+      if (barFactor > 0.001) {
+        const rowMultiplier = 1 + this._intensity * barFactor
+
+        for (let x = 0; x < width; x++) {
+          const colorIndex = (y * width + x) * 4
+
+          // Brighten foreground
+          fg[colorIndex] = Math.min(1, fg[colorIndex] * rowMultiplier)
+          fg[colorIndex + 1] = Math.min(1, fg[colorIndex + 1] * rowMultiplier)
+          fg[colorIndex + 2] = Math.min(1, fg[colorIndex + 2] * rowMultiplier)
+
+          // Brighten background
+          bg[colorIndex] = Math.min(1, bg[colorIndex] * rowMultiplier)
+          bg[colorIndex + 1] = Math.min(1, bg[colorIndex + 1] * rowMultiplier)
+          bg[colorIndex + 2] = Math.min(1, bg[colorIndex + 2] * rowMultiplier)
+        }
+      }
+    }
+  }
+}
+
+/**
  * Applies animated rainbow colors to cells with white foreground.
  * Cycles through HSV hue spectrum over time.
  */

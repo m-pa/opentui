@@ -23,7 +23,14 @@ import {
   AmbientLight,
 } from "three"
 import * as Filters from "../post/filters"
-import { DistortionEffect, VignetteEffect, CloudsEffect, FlamesEffect, RainbowTextEffect } from "../post/filters"
+import {
+  DistortionEffect,
+  VignetteEffect,
+  CloudsEffect,
+  FlamesEffect,
+  RainbowTextEffect,
+  CRTRollingBarEffect,
+} from "../post/filters"
 import * as Matrices from "../post/matrices"
 import type { OptimizedBuffer } from "../buffer"
 import { ThreeCliRenderer } from "../3d"
@@ -44,6 +51,7 @@ interface ShaderCubeDemoState {
   cloudsEffectInstance: CloudsEffect
   flamesEffectInstance: FlamesEffect
   rainbowTextEffectInstance: RainbowTextEffect
+  crtRollingBarEffectInstance: CRTRollingBarEffect
   brightnessValue: number
   gainValue: number
   colorMatrixEffectInstance: ColorMatrixEffect
@@ -106,6 +114,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
   const cloudsEffectInstance = new CloudsEffect(0.27, 0.001, 0.75, 1.0)
   const flamesEffectInstance = new FlamesEffect(0.04, 0.02, 0.9)
   const rainbowTextEffectInstance = new RainbowTextEffect(0.006, 1.0, 1.0, 10.0)
+  const crtRollingBarEffectInstance = new CRTRollingBarEffect(0.8, 0.1, 0.4, 0.2)
 
   // Simple value-based brightness and gain (no class instances)
   let brightnessValue = 0.0
@@ -189,6 +198,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Clouds", func: cloudsEffectInstance.apply.bind(cloudsEffectInstance) },
     { name: "Flames", func: flamesEffectInstance.apply.bind(flamesEffectInstance) },
     { name: "Rainbow Text", func: rainbowTextEffectInstance.apply.bind(rainbowTextEffectInstance) },
+    { name: "CRT Rolling Bar", func: crtRollingBarEffectInstance.apply.bind(crtRollingBarEffectInstance) },
     { name: "Brightness", func: (buf, _dt) => Filters.applyBrightness(buf, brightnessValue) },
     { name: "Gain", func: (buf, _dt) => Filters.applyGain(buf, gainValue) },
     {
@@ -503,6 +513,12 @@ export async function run(renderer: CliRenderer): Promise<void> {
         param1Visible = true
         param2StatusText.visible = true
         break
+      case "CRT Rolling Bar":
+        param1Text = `CRT Bar: speed=${crtRollingBarEffectInstance.speed.toFixed(2)} ([/] to adjust)`
+        param2StatusText.content = `intensity=${crtRollingBarEffectInstance.intensity.toFixed(2)} ({/} to adjust)`
+        param1Visible = true
+        param2StatusText.visible = true
+        break
     }
 
     param1StatusText.content = param1Text
@@ -510,7 +526,8 @@ export async function run(renderer: CliRenderer): Promise<void> {
     if (
       selectedFilter.name !== "Clouds" &&
       selectedFilter.name !== "Flames" &&
-      selectedFilter.name !== "Rainbow Text"
+      selectedFilter.name !== "Rainbow Text" &&
+      selectedFilter.name !== "CRT Rolling Bar"
     ) {
       param2StatusText.content = ""
       param2StatusText.visible = false
@@ -708,6 +725,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           rainbowTextEffectInstance.speed = Math.max(0, rainbowTextEffectInstance.speed - 0.001)
           paramChanged = true
           break
+        case "CRT Rolling Bar":
+          crtRollingBarEffectInstance.speed = Math.max(0.1, crtRollingBarEffectInstance.speed - 0.1)
+          paramChanged = true
+          break
       }
     } else if (key.name === "]") {
       switch (currentFilterName) {
@@ -750,6 +771,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           rainbowTextEffectInstance.speed = Math.min(0.5, rainbowTextEffectInstance.speed + 0.001)
           paramChanged = true
           break
+        case "CRT Rolling Bar":
+          crtRollingBarEffectInstance.speed = Math.min(5.0, crtRollingBarEffectInstance.speed + 0.1)
+          paramChanged = true
+          break
       }
     }
 
@@ -772,6 +797,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           rainbowTextEffectInstance.repeats = Math.max(1.0, rainbowTextEffectInstance.repeats - 0.5)
           paramChanged = true
           break
+        case "CRT Rolling Bar":
+          crtRollingBarEffectInstance.intensity = Math.max(0.0, crtRollingBarEffectInstance.intensity - 0.05)
+          paramChanged = true
+          break
       }
     } else if (key.name === "}") {
       switch (currentFilterName) {
@@ -789,6 +818,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           break
         case "Rainbow Text":
           rainbowTextEffectInstance.repeats = Math.min(20.0, rainbowTextEffectInstance.repeats + 0.5)
+          paramChanged = true
+          break
+        case "CRT Rolling Bar":
+          crtRollingBarEffectInstance.intensity = Math.min(1.0, crtRollingBarEffectInstance.intensity + 0.05)
           paramChanged = true
           break
       }
@@ -877,6 +910,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     cloudsEffectInstance,
     flamesEffectInstance,
     rainbowTextEffectInstance,
+    crtRollingBarEffectInstance,
     brightnessValue,
     gainValue,
     colorMatrixEffectInstance,
