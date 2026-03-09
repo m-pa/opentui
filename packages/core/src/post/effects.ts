@@ -491,13 +491,12 @@ export class CloudsEffect {
   }
 
   /**
-   * Applies cloud shadow effect using Perlin noise mask.
-   * Uses FBM (Fractal Brownian Motion) for more detailed clouds.
+   * Applies cloud shadow effect using Perlin noise mask with native colorMatrix.
+   * Uses FBM (Fractal Brownian Motion) for detailed clouds, offloaded to native code.
    */
   public apply(buffer: OptimizedBuffer, deltaTime: number): void {
     const width = buffer.width
     const height = buffer.height
-    const bg = buffer.buffers.bg
 
     // Update time for animation
     this.time += deltaTime * this._speed
@@ -505,7 +504,11 @@ export class CloudsEffect {
     const scale = this._scale
     const timeOffset = this.time
 
-    // Generate noise mask and apply directly to buffer
+    // Build cell mask with per-pixel attenuation values
+    // Format: [x, y, attenuation] for each pixel
+    const cellMask = new Float32Array(width * height * 3)
+    let maskIdx = 0
+
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         // FBM - combine multiple octaves for detail
@@ -535,15 +538,18 @@ export class CloudsEffect {
         // Scale to actual darkness (0 = no change, 1 = full darkness)
         const attenuation = cloudDensity * this._darkness
 
-        if (attenuation > 0) {
-          const colorIndex = (y * width + x) * 4
-          const factor = 1 - attenuation
-          bg[colorIndex] *= factor
-          bg[colorIndex + 1] *= factor
-          bg[colorIndex + 2] *= factor
-        }
+        // Add to cell mask
+        cellMask[maskIdx++] = x
+        cellMask[maskIdx++] = y
+        cellMask[maskIdx++] = attenuation
       }
     }
+
+    // Use native colorMatrix with zero matrix to apply attenuation
+    // Zero matrix: transformed = 0 (black)
+    // Result = original + (0 - original) × attenuation = original × (1 - attenuation)
+    const zeroMatrix = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    buffer.colorMatrix(zeroMatrix, cellMask, 1.0, 2) // target = 2 (background only)
   }
 }
 
@@ -709,27 +715,6 @@ export class RainbowTextEffect {
   }
   public get repeats(): number {
     return this._repeats
-  }
-
-  public set speed(newSpeed: number) {
-    this._speed = Math.max(0, newSpeed)
-  }
-  public get speed(): number {
-    return this._speed
-  }
-
-  public set saturation(newSaturation: number) {
-    this._saturation = Math.max(0, Math.min(1, newSaturation))
-  }
-  public get saturation(): number {
-    return this._saturation
-  }
-
-  public set value(newValue: number) {
-    this._value = Math.max(0, Math.min(1, newValue))
-  }
-  public get value(): number {
-    return this._value
   }
 
   /**
