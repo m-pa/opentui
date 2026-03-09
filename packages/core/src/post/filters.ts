@@ -78,13 +78,20 @@ export function applyNoise(buffer: OptimizedBuffer, strength: number = 0.1): voi
   const matrix = new Float32Array([
     b,
     0,
+    0,
     0, // Row 0 (Red output)
     0,
     b,
+    0,
     0, // Row 1 (Green output)
     0,
     0,
-    b, // Row 2 (Blue output)
+    b,
+    0, // Row 2 (Blue output)
+    0,
+    0,
+    0,
+    1, // Row 3 (Alpha output - identity)
   ])
 
   buffer.colorMatrix(matrix, cellMask, 1.0)
@@ -163,13 +170,20 @@ export function brightness(buffer: OptimizedBuffer, brightness: number = 1.0, ce
   const matrix = new Float32Array([
     b,
     0,
+    0,
     0, // Row 0 (Red output)
     0,
     b,
+    0,
     0, // Row 1 (Green output)
     0,
     0,
-    b, // Row 2 (Blue output)
+    b,
+    0, // Row 2 (Blue output)
+    0,
+    0,
+    0,
+    1, // Row 3 (Alpha output - identity)
   ])
 
   if (!cellMask || cellMask.length === 0) {
@@ -196,13 +210,20 @@ export function gain(buffer: OptimizedBuffer, gain: number = 1.0, cellMask?: Flo
   const matrix = new Float32Array([
     g,
     0,
+    0,
     0, // Row 0 (Red output)
     0,
     g,
+    0,
     0, // Row 1 (Green output)
     0,
     0,
-    g, // Row 2 (Blue output)
+    g,
+    0, // Row 2 (Blue output)
+    0,
+    0,
+    0,
+    1, // Row 3 (Alpha output - identity)
   ])
 
   if (!cellMask || cellMask.length === 0) {
@@ -214,9 +235,9 @@ export function gain(buffer: OptimizedBuffer, gain: number = 1.0, cellMask?: Flo
 }
 
 /**
- * Generates a saturation color matrix.
+ * Generates a saturation color matrix (4x4 RGBA with alpha identity).
  * @param saturation - 0.0 = grayscale, 1.0 = unchanged
- * @returns 3x3 color matrix as Float32Array
+ * @returns 4x4 color matrix as Float32Array (16 values)
  */
 function createSaturationMatrix(saturation: number): Float32Array {
   const s = Math.max(0, saturation)
@@ -239,7 +260,25 @@ function createSaturationMatrix(saturation: number): Float32Array {
   const m21 = sg // 0.587 * (1 - s)
   const m22 = sb + s // 0.114 + 0.886*s
 
-  return new Float32Array([m00, m01, m02, m10, m11, m12, m20, m21, m22])
+  // 4x4 matrix with alpha identity
+  return new Float32Array([
+    m00,
+    m01,
+    m02,
+    0, // Red output row
+    m10,
+    m11,
+    m12,
+    0, // Green output row
+    m20,
+    m21,
+    m22,
+    0, // Blue output row
+    0,
+    0,
+    0,
+    1, // Alpha output row (identity)
+  ])
 }
 
 /**
@@ -303,7 +342,25 @@ export class GrayscaleEffect {
     const m21 = s * 0.587
     const m22 = t + s * 0.114
 
-    return new Float32Array([m00, m01, m02, m10, m11, m12, m20, m21, m22])
+    // 4x4 matrix with alpha identity
+    return new Float32Array([
+      m00,
+      m01,
+      m02,
+      0, // Red output row
+      m10,
+      m11,
+      m12,
+      0, // Green output row
+      m20,
+      m21,
+      m22,
+      0, // Blue output row
+      0,
+      0,
+      0,
+      1, // Alpha output row (identity)
+    ])
   }
 
   public set strength(newStrength: number) {

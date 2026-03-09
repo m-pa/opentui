@@ -259,7 +259,7 @@ export class VignetteEffect {
   private cachedWidth: number = -1
   private cachedHeight: number = -1
   // Zero matrix for attenuation (maps everything toward black based on strength)
-  private static zeroMatrix = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0])
+  private static zeroMatrix = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 
   constructor(strength: number = 0.5) {
     this._strength = strength

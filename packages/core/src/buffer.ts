@@ -1,4 +1,3 @@
-import type { TextBuffer } from "./text-buffer"
 import { RGBA } from "./lib"
 import { resolveRenderLib, type RenderLib } from "./zig"
 import { type Pointer, toArrayBuffer, ptr } from "bun:ffi"
@@ -240,16 +239,20 @@ export class OptimizedBuffer {
   }
 
   /**
-   * Apply a 3x3 color matrix transformation to the buffer.
-   * @param matrix - 9 values representing a 3x3 matrix in row-major order [m00, m01, m02, m10, m11, m12, m20, m21, m22]
+   * Apply a 4x4 color matrix transformation to the buffer.
+   * @param matrix - 16 values representing a 4x4 RGBA matrix in row-major order (each row = output channel):
+   *   [r->r, g->r, b->r, a->r,  // Row 0: Red output coefficients
+   *    r->g, g->g, b->g, a->g,  // Row 1: Green output coefficients
+   *    r->b, g->b, b->b, a->b,  // Row 2: Blue output coefficients
+   *    r->a, g->a, b->a, a->a]  // Row 3: Alpha output coefficients (usually [0,0,0,1])
    * @param cellMask - Array of [x, y, strength] cell masks for per-pixel application
    * @param strength - Optional global strength multiplier (defaults to 1.0)
    */
   public colorMatrix(matrix: number[] | Float32Array, cellMask: number[] | Float32Array, strength: number = 1.0): void {
     this.guard()
     const matrixArray = matrix instanceof Float32Array ? matrix : new Float32Array(matrix)
-    if (matrixArray.length !== 9) {
-      throw new Error("Color matrix must be a 3x3 matrix (9 values)")
+    if (matrixArray.length !== 16) {
+      throw new Error("Color matrix must be a 4x4 RGBA matrix (16 values)")
     }
 
     let cellMaskArray: Float32Array
@@ -267,15 +270,19 @@ export class OptimizedBuffer {
   }
 
   /**
-   * Apply a 3x3 color matrix transformation uniformly to the entire buffer.
-   * @param matrix - 9 values representing a 3x3 matrix in row-major order [m00, m01, m02, m10, m11, m12, m20, m21, m22]
+   * Apply a 4x4 color matrix transformation uniformly to the entire buffer.
+   * @param matrix - 16 values representing a 4x4 RGBA matrix in row-major order (each row = output channel):
+   *   [r->r, g->r, b->r, a->r,  // Row 0: Red output coefficients
+   *    r->g, g->g, b->g, a->g,  // Row 1: Green output coefficients
+   *    r->b, g->b, b->b, a->b,  // Row 2: Blue output coefficients
+   *    r->a, g->a, b->a, a->a]  // Row 3: Alpha output coefficients (usually [0,0,0,1])
    * @param strength - Optional strength multiplier (0.0 = no effect, 1.0 = full matrix, defaults to 1.0)
    */
   public colorMatrixUniform(matrix: number[] | Float32Array, strength: number = 1.0): void {
     this.guard()
     const matrixArray = matrix instanceof Float32Array ? matrix : new Float32Array(matrix)
-    if (matrixArray.length !== 9) {
-      throw new Error("Color matrix must be a 3x3 matrix (9 values)")
+    if (matrixArray.length !== 16) {
+      throw new Error("Color matrix must be a 4x4 RGBA matrix (16 values)")
     }
     if (strength === 0.0) return
     this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrixArray), strength)
