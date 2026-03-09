@@ -5,7 +5,6 @@ import { type BorderStyle, type BorderSides, BorderCharArrays, parseBorderStyle 
 import { type WidthMethod, type CapturedSpan, type CapturedLine } from "./types"
 import type { TextBufferView } from "./text-buffer-view"
 import type { EditorView } from "./editor-view"
-import { saturate, brightness, gain } from "./post/filters"
 
 // Pack drawing options into a single u32
 // bits 0-3: borderSides, bit 4: shouldFill, bits 5-6: titleAlignment
@@ -565,41 +564,5 @@ export class OptimizedBuffer {
   public drawChar(char: number, x: number, y: number, fg: RGBA, bg: RGBA, attributes: number = 0): void {
     this.guard()
     this.lib.bufferDrawChar(this.bufferPtr, char, x, y, fg, bg, attributes)
-  }
-
-  /**
-   * Apply a brightness adjustment to the buffer using a color matrix.
-   * @param brightnessValue - brightness factor: <1.0 darkens, 1.0 unchanged, >1.0 brightens
-   * @param cellMask - Optional array of [x, y, strength] cell masks for selective brightness.
-   *                   If not provided, applies uniform brightness to entire buffer.
-   */
-  public brightness(brightnessValue: number = 1.0, cellMask?: Float32Array): void {
-    this.guard()
-    if (brightnessValue === 1.0) return
-    brightness(this, brightnessValue, cellMask)
-  }
-
-  /**
-   * Apply a gain adjustment to the buffer using a color matrix.
-   * @param gainValue - gain factor: <1.0 reduces, 1.0 unchanged, >1.0 amplifies
-   * @param cellMask - Optional array of [x, y, strength] cell masks for selective gain.
-   *                   If not provided, applies uniform gain to entire buffer.
-   */
-  public gain(gainValue: number = 1.0, cellMask?: Float32Array): void {
-    this.guard()
-    if (gainValue === 1.0) return
-    gain(this, gainValue, cellMask)
-  }
-
-  /**
-   * Apply a saturation adjustment to the buffer using a color matrix.
-   * @param saturation - 0.0 = grayscale, 1.0 = unchanged, >1.0 = oversaturated
-   * @param cellMask - Optional array of [x, y, strength] cell masks for selective saturation.
-   *                   If not provided, applies uniform saturation to entire buffer.
-   */
-  public saturate(saturation: number = 1.0, cellMask?: Float32Array): void {
-    this.guard()
-    if (saturation === 1.0) return
-    saturate(this, cellMask, saturation)
   }
 }

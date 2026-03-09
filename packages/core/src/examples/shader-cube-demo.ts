@@ -183,7 +183,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Distortion", func: distortionEffectInstance.apply.bind(distortionEffectInstance) },
     { name: "Brightness", func: (buf, _dt) => Filters.brightness(buf, brightnessValue) },
     { name: "Gain", func: (buf, _dt) => Filters.gain(buf, gainValue) },
-    { name: "Saturation", func: (buf, _dt) => buf.saturate(saturationValue, saturationCellMask ?? undefined) },
+    { name: "Saturation", func: (buf, _dt) => Filters.saturate(buf, saturationCellMask ?? undefined, saturationValue) },
   ]
 
   // Box in the background to show alpha channel works
