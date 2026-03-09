@@ -179,10 +179,16 @@ export function applyChromaticAberration(buffer: OptimizedBuffer, strength: numb
 /**
  * Converts the buffer to ASCII art based on background brightness.
  */
-export function applyAsciiArt(buffer: OptimizedBuffer, ramp: string = " .:-=+*#%@"): void {
+export function applyAsciiArt(
+  buffer: OptimizedBuffer,
+  ramp: string = " .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$",
+  fgColor: { r: number; g: number; b: number } = { r: 1.0, g: 1.0, b: 1.0 },
+  bgColor: { r: number; g: number; b: number } = { r: 0.0, g: 0.0, b: 0.0 },
+): void {
   const width = buffer.width
   const height = buffer.height
   const chars = buffer.buffers.char
+  const fg = buffer.buffers.fg
   const bg = buffer.buffers.bg
   const rampLength = ramp.length
 
@@ -196,6 +202,14 @@ export function applyAsciiArt(buffer: OptimizedBuffer, ramp: string = " .:-=+*#%
       const lum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB // Luminance
       const rampIndex = Math.min(rampLength - 1, Math.floor(lum * rampLength))
       chars[index] = ramp[rampIndex].charCodeAt(0)
+      // Overwrite foreground color
+      fg[colorIndex] = fgColor.r
+      fg[colorIndex + 1] = fgColor.g
+      fg[colorIndex + 2] = fgColor.b
+      // Overwrite background color
+      bg[colorIndex] = bgColor.r
+      bg[colorIndex + 1] = bgColor.g
+      bg[colorIndex + 2] = bgColor.b
     }
   }
 }
