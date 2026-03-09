@@ -206,3 +206,43 @@ export const SOLARIZATION_MATRIX = new Float32Array([
   0,
   1, // Alpha output - identity
 ])
+
+// Synthwave effect - eliminates green and shifts red toward magenta for that retro neon aesthetic
+export const SYNTHWAVE_MATRIX = new Float32Array([
+  1.0,
+  0.0,
+  0.25,
+  0, // Red output - full red + some blue = magenta when bright
+  0.1,
+  0.1,
+  0.1,
+  0, // Green output - heavily suppressed, minimal contribution
+  0.25,
+  0.0,
+  1.0,
+  0, // Blue output - full blue + some red = enhances magenta tones
+  0,
+  0,
+  0,
+  1, // Alpha output - identity
+])
+
+// Greenscale effect - converts image to monochrome green by mapping luminance to green channel only
+export const GREENSCALE_MATRIX = new Float32Array([
+  0,
+  0,
+  0,
+  0, // Red output - zeroed out
+  0.299,
+  0.587,
+  0.114,
+  0, // Green output - full luminance from all channels
+  0,
+  0,
+  0,
+  0, // Blue output - zeroed out
+  0,
+  0,
+  0,
+  1, // Alpha output - identity
+])

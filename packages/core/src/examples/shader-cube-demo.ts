@@ -23,7 +23,7 @@ import {
   AmbientLight,
 } from "three"
 import * as Filters from "../post/filters"
-import { DistortionEffect, VignetteEffect, GrayscaleEffect } from "../post/filters"
+import { DistortionEffect, VignetteEffect, GrayscaleEffect, CloudsEffect } from "../post/filters"
 import * as Matrices from "../post/matrices"
 import type { OptimizedBuffer } from "../buffer"
 import { ThreeCliRenderer } from "../3d"
@@ -41,6 +41,7 @@ interface ShaderCubeDemoState {
   materials: MeshPhongMaterial[]
   distortionEffectInstance: DistortionEffect
   vignetteEffectInstance: VignetteEffect
+  cloudsEffectInstance: CloudsEffect
   brightnessValue: number
   gainValue: number
   grayscaleEffectInstance: GrayscaleEffect
@@ -101,6 +102,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
   // Initialize effect instances
   const distortionEffectInstance = new DistortionEffect()
   const vignetteEffectInstance = new VignetteEffect()
+  const cloudsEffectInstance = new CloudsEffect(0.27, 0.001, 0.75, 1.0)
 
   // Simple value-based brightness and gain (no class instances)
   let brightnessValue = 0.0
@@ -144,6 +146,8 @@ export async function run(renderer: CliRenderer): Promise<void> {
     // Creative effects
     { name: "Technicolor", matrix: Matrices.TECHNICOLOR_MATRIX },
     { name: "Solarization", matrix: Matrices.SOLARIZATION_MATRIX },
+    { name: "Synthwave", matrix: Matrices.SYNTHWAVE_MATRIX },
+    { name: "Greenscale", matrix: Matrices.GREENSCALE_MATRIX },
   ]
 
   // ColorMatrix effect that can cycle through all matrices
@@ -181,6 +185,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Chromatic Aberration", func: (buf, _dt) => Filters.applyChromaticAberration(buf, 2) },
     { name: "ASCII Art", func: (buf, _dt) => Filters.applyAsciiArt(buf) },
     { name: "Distortion", func: distortionEffectInstance.apply.bind(distortionEffectInstance) },
+    { name: "Clouds", func: cloudsEffectInstance.apply.bind(cloudsEffectInstance) },
     { name: "Brightness", func: (buf, _dt) => Filters.applyBrightness(buf, brightnessValue) },
     { name: "Gain", func: (buf, _dt) => Filters.applyGain(buf, gainValue) },
     {
@@ -477,12 +482,20 @@ export async function run(renderer: CliRenderer): Promise<void> {
         param1Text = `Matrix: ${colorMatrixEffectInstance.currentMatrixName} ([/] to cycle)`
         param1Visible = true
         break
+      case "Clouds":
+        param1Text = `Clouds: scale=${cloudsEffectInstance.scale.toFixed(3)} ([/] to adjust)`
+        param2StatusText.content = `speed=${cloudsEffectInstance.speed.toFixed(3)} ({/} to adjust)`
+        param1Visible = true
+        param2StatusText.visible = true
+        break
     }
 
     param1StatusText.content = param1Text
     param1StatusText.visible = param1Visible
-    param2StatusText.content = ""
-    param2StatusText.visible = false
+    if (selectedFilter.name !== "Clouds") {
+      param2StatusText.content = ""
+      param2StatusText.visible = false
+    }
   }
 
   function updateTextureEffectsUI() {
@@ -664,6 +677,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           colorMatrixEffectInstance.previousMatrix()
           paramChanged = true
           break
+        case "Clouds":
+          cloudsEffectInstance.scale = Math.max(0.05, cloudsEffectInstance.scale - 0.01)
+          paramChanged = true
+          break
       }
     } else if (key.name === "]") {
       switch (currentFilterName) {
@@ -694,6 +711,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           colorMatrixEffectInstance.nextMatrix()
           paramChanged = true
           break
+        case "Clouds":
+          cloudsEffectInstance.scale = Math.min(1.0, cloudsEffectInstance.scale + 0.01)
+          paramChanged = true
+          break
       }
     }
 
@@ -704,11 +725,19 @@ export async function run(renderer: CliRenderer): Promise<void> {
           distortionEffectInstance.maxGlitchLines = Math.max(0, distortionEffectInstance.maxGlitchLines - 1)
           paramChanged = true
           break
+        case "Clouds":
+          cloudsEffectInstance.speed = Math.max(0.0, cloudsEffectInstance.speed - 0.001)
+          paramChanged = true
+          break
       }
     } else if (key.name === "}") {
       switch (currentFilterName) {
         case "Distortion":
           distortionEffectInstance.maxGlitchLines = Math.min(height - 1, distortionEffectInstance.maxGlitchLines + 1)
+          paramChanged = true
+          break
+        case "Clouds":
+          cloudsEffectInstance.speed = Math.min(0.02, cloudsEffectInstance.speed + 0.001)
           paramChanged = true
           break
       }
@@ -794,6 +823,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     materials,
     distortionEffectInstance,
     vignetteEffectInstance,
+    cloudsEffectInstance,
     brightnessValue,
     gainValue,
     grayscaleEffectInstance,

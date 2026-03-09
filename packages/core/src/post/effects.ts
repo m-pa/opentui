@@ -327,3 +327,222 @@ export class VignetteEffect {
     buffer.colorMatrix(VignetteEffect.zeroMatrix, this.precomputedAttenuationCellMask!, 1.0, 3)
   }
 }
+
+/**
+ * Simple Perlin noise implementation for procedural cloud generation.
+ * Uses gradient vectors and smooth interpolation.
+ */
+class PerlinNoise {
+  private perm: Uint8Array
+  private grad3: number[][] = [
+    [1, 1, 0],
+    [-1, 1, 0],
+    [1, -1, 0],
+    [-1, -1, 0],
+    [1, 0, 1],
+    [-1, 0, 1],
+    [1, 0, -1],
+    [-1, 0, -1],
+    [0, 1, 1],
+    [0, -1, 1],
+    [0, 1, -1],
+    [0, -1, -1],
+  ]
+
+  constructor() {
+    // Permutation table for pseudo-random gradient selection
+    this.perm = new Uint8Array(512)
+    const p = new Uint8Array(256)
+    for (let i = 0; i < 256; i++) {
+      p[i] = i
+    }
+    // Shuffle
+    for (let i = 255; i > 0; i--) {
+      const r = Math.floor(Math.random() * (i + 1))
+      ;[p[i], p[r]] = [p[r], p[i]]
+    }
+    // Duplicate for overflow handling
+    for (let i = 0; i < 512; i++) {
+      this.perm[i] = p[i & 255]
+    }
+  }
+
+  private dot(g: number[], x: number, y: number, z: number): number {
+    return g[0] * x + g[1] * y + g[2] * z
+  }
+
+  private mix(a: number, b: number, t: number): number {
+    return a + (b - a) * t
+  }
+
+  private fade(t: number): number {
+    return t * t * t * (t * (t * 6 - 15) + 10)
+  }
+
+  /**
+   * 3D Perlin noise at coordinates (x, y, z)
+   * Returns value in range [-1, 1]
+   */
+  noise3d(x: number, y: number, z: number): number {
+    // Find unit grid cell containing point
+    const X = Math.floor(x) & 255
+    const Y = Math.floor(y) & 255
+    const Z = Math.floor(z) & 255
+
+    // Get relative xyz coordinates of point within that cell
+    const xf = x - Math.floor(x)
+    const yf = y - Math.floor(y)
+    const zf = z - Math.floor(z)
+
+    // Compute fade curves for each of x, y, z
+    const u = this.fade(xf)
+    const v = this.fade(yf)
+    const w = this.fade(zf)
+
+    // Hash coordinates of the 8 cube corners
+    const A = this.perm[X] + Y
+    const AA = this.perm[A] + Z
+    const AB = this.perm[A + 1] + Z
+    const B = this.perm[X + 1] + Y
+    const BA = this.perm[B] + Z
+    const BB = this.perm[B + 1] + Z
+
+    // Add blended results from 8 corners of the cube
+    let res = this.mix(
+      this.mix(
+        this.mix(
+          this.dot(this.grad3[this.perm[AA] % 12], xf, yf, zf),
+          this.dot(this.grad3[this.perm[BA] % 12], xf - 1, yf, zf),
+          u,
+        ),
+        this.mix(
+          this.dot(this.grad3[this.perm[AB] % 12], xf, yf - 1, zf),
+          this.dot(this.grad3[this.perm[BB] % 12], xf - 1, yf - 1, zf),
+          u,
+        ),
+        v,
+      ),
+      this.mix(
+        this.mix(
+          this.dot(this.grad3[this.perm[AA + 1] % 12], xf, yf, zf - 1),
+          this.dot(this.grad3[this.perm[BA + 1] % 12], xf - 1, yf, zf - 1),
+          u,
+        ),
+        this.mix(
+          this.dot(this.grad3[this.perm[AB + 1] % 12], xf, yf - 1, zf - 1),
+          this.dot(this.grad3[this.perm[BB + 1] % 12], xf - 1, yf - 1, zf - 1),
+          u,
+        ),
+        v,
+      ),
+      w,
+    )
+
+    return res
+  }
+}
+
+/**
+ * Applies animated cloud shadows using Perlin noise.
+ * Darkens the background buffer based on procedural cloud density.
+ */
+export class CloudsEffect {
+  private noise: PerlinNoise
+  private _scale: number
+  private _speed: number
+  private _density: number
+  private _darkness: number
+  private time: number = 0
+
+  constructor(scale: number = 0.02, speed: number = 0.5, density: number = 0.6, darkness: number = 0.7) {
+    this.noise = new PerlinNoise()
+    this._scale = scale
+    this._speed = speed
+    this._density = density
+    this._darkness = darkness
+  }
+
+  public set scale(newScale: number) {
+    this._scale = Math.max(0.001, newScale)
+  }
+  public get scale(): number {
+    return this._scale
+  }
+
+  public set speed(newSpeed: number) {
+    this._speed = Math.max(0, newSpeed)
+  }
+  public get speed(): number {
+    return this._speed
+  }
+
+  public set density(newDensity: number) {
+    this._density = Math.max(0, Math.min(1, newDensity))
+  }
+  public get density(): number {
+    return this._density
+  }
+
+  public set darkness(newDarkness: number) {
+    this._darkness = Math.max(0, Math.min(1, newDarkness))
+  }
+  public get darkness(): number {
+    return this._darkness
+  }
+
+  /**
+   * Applies cloud shadow effect using Perlin noise mask.
+   * Uses FBM (Fractal Brownian Motion) for more detailed clouds.
+   */
+  public apply(buffer: OptimizedBuffer, deltaTime: number): void {
+    const width = buffer.width
+    const height = buffer.height
+    const bg = buffer.buffers.bg
+
+    // Update time for animation
+    this.time += deltaTime * this._speed
+
+    const scale = this._scale
+    const timeOffset = this.time
+
+    // Generate noise mask and apply directly to buffer
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        // FBM - combine multiple octaves for detail
+        let noiseValue = 0
+        let amplitude = 1
+        let frequency = 1
+        let maxValue = 0
+
+        // 4 octaves of noise
+        for (let i = 0; i < 4; i++) {
+          const nx = (x * scale * frequency + timeOffset) * 0.5
+          const ny = y * scale * frequency * 0.5
+          const nz = timeOffset * 0.3 // Use time as z for evolution
+
+          noiseValue += this.noise.noise3d(nx, ny, nz) * amplitude
+          maxValue += amplitude
+          amplitude *= 0.5
+          frequency *= 2
+        }
+
+        // Normalize to [0, 1]
+        noiseValue = (noiseValue / maxValue + 1) * 0.5
+
+        // Apply density threshold - lower density = more clouds
+        const cloudDensity = Math.max(0, noiseValue - (1 - this._density))
+
+        // Scale to actual darkness (0 = no change, 1 = full darkness)
+        const attenuation = cloudDensity * this._darkness
+
+        if (attenuation > 0) {
+          const colorIndex = (y * width + x) * 4
+          const factor = 1 - attenuation
+          bg[colorIndex] *= factor
+          bg[colorIndex + 1] *= factor
+          bg[colorIndex + 2] *= factor
+        }
+      }
+    }
+  }
+}

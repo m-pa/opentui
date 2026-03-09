@@ -1,7 +1,7 @@
 import type { OptimizedBuffer } from "../buffer"
 
 // Re-export effects from effects.ts
-export { DistortionEffect, VignetteEffect } from "./effects"
+export { DistortionEffect, VignetteEffect, CloudsEffect } from "./effects"
 
 /**
  * Applies a scanline effect by darkening every nth row using native color matrix.
