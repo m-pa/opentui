@@ -400,17 +400,17 @@ export fn bufferFillRect(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, wid
     bufferPtr.fillRect(x, y, width, height, rgbaBg) catch {};
 }
 
-export fn bufferColorMatrix(bufferPtr: *buffer.OptimizedBuffer, matrixPtr: [*]const f32, cellMaskPtr: [*]const f32, cellMaskCount: usize, strength: f32) void {
+export fn bufferColorMatrix(bufferPtr: *buffer.OptimizedBuffer, matrixPtr: [*]const f32, cellMaskPtr: [*]const f32, cellMaskCount: usize, strength: f32, target: u8) void {
     if (cellMaskCount == 0) return;
     const matrix = matrixPtr[0..16];
     const len = cellMaskCount * 3;
     const cellMask = cellMaskPtr[0..len];
-    bufferPtr.colorMatrix(matrix, cellMask, strength);
+    bufferPtr.colorMatrix(matrix, cellMask, strength, target);
 }
 
-export fn bufferColorMatrixUniform(bufferPtr: *buffer.OptimizedBuffer, matrixPtr: [*]const f32, strength: f32) void {
+export fn bufferColorMatrixUniform(bufferPtr: *buffer.OptimizedBuffer, matrixPtr: [*]const f32, strength: f32, target: u8) void {
     const matrix = matrixPtr[0..16];
-    bufferPtr.colorMatrixUniform(matrix, strength);
+    bufferPtr.colorMatrixUniform(matrix, strength, target);
 }
 
 export fn bufferDrawPackedBuffer(bufferPtr: *buffer.OptimizedBuffer, data: [*]const u8, dataLen: usize, posX: u32, posY: u32, terminalWidthCells: u32, terminalHeightCells: u32) void {

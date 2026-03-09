@@ -4,22 +4,55 @@ import type { OptimizedBuffer } from "../buffer"
 export { DistortionEffect, VignetteEffect } from "./effects"
 
 /**
- * Applies a scanline effect by darkening every nth row.
+ * Applies a scanline effect by darkening every nth row using native color matrix.
+ * Only affects the background buffer to maintain text readability.
+ * @param buffer - The buffer to apply the effect to
+ * @param strength - Darkening factor: 1.0 = unchanged, <1.0 darkens (default: 0.8)
+ * @param step - Row interval for scanlines (default: 2 = every other row)
  */
 export function applyScanlines(buffer: OptimizedBuffer, strength: number = 0.8, step: number = 2): void {
+  if (strength === 1.0 || step < 1) return
+
   const width = buffer.width
   const height = buffer.height
-  const bg = buffer.buffers.bg
 
+  // Calculate number of affected rows
+  const affectedRows = Math.ceil(height / step)
+  const cellCount = width * affectedRows
+  const cellMask = new Float32Array(cellCount * 3)
+
+  let maskIdx = 0
   for (let y = 0; y < height; y += step) {
     for (let x = 0; x < width; x++) {
-      const colorIndex = (y * width + x) * 4
-      bg[colorIndex] *= strength // R
-      bg[colorIndex + 1] *= strength // G
-      bg[colorIndex + 2] *= strength // B
-      // Keep Alpha the same
+      cellMask[maskIdx++] = x
+      cellMask[maskIdx++] = y
+      cellMask[maskIdx++] = 1.0 // full strength
     }
   }
+
+  // Gain matrix to scale down background colors
+  const s = strength
+  const matrix = new Float32Array([
+    s,
+    0,
+    0,
+    0, // Row 0: Red output
+    0,
+    s,
+    0,
+    0, // Row 1: Green output
+    0,
+    0,
+    s,
+    0, // Row 2: Blue output
+    0,
+    0,
+    0,
+    1, // Row 3: Alpha output (identity)
+  ])
+
+  // Apply only to background buffer (target = 2)
+  buffer.colorMatrix(matrix, cellMask, 1.0, 2)
 }
 
 /**
@@ -94,7 +127,7 @@ export function applyNoise(buffer: OptimizedBuffer, strength: number = 0.1): voi
     1, // Row 3 (Alpha output - identity)
   ])
 
-  buffer.colorMatrix(matrix, cellMask, 1.0)
+  buffer.colorMatrix(matrix, cellMask, 1.0, 3)
 }
 
 /**
@@ -188,9 +221,9 @@ export function applyBrightness(buffer: OptimizedBuffer, brightness: number = 0.
   ])
 
   if (!cellMask || cellMask.length === 0) {
-    buffer.colorMatrixUniform(matrix, 1.0)
+    buffer.colorMatrixUniform(matrix, 1.0, 3)
   } else {
-    buffer.colorMatrix(matrix, cellMask, 1.0)
+    buffer.colorMatrix(matrix, cellMask, 1.0, 3)
   }
 }
 
@@ -227,10 +260,10 @@ export function applyGain(buffer: OptimizedBuffer, gain: number = 1.0, cellMask?
   ])
 
   if (!cellMask || cellMask.length === 0) {
-    buffer.colorMatrixUniform(matrix, 1.0)
+    buffer.colorMatrixUniform(matrix, 1.0, 3)
   } else {
     const cellMaskCount = Math.floor(cellMask.length / 3)
-    buffer.colorMatrix(matrix, cellMask, 1.0)
+    buffer.colorMatrix(matrix, cellMask, 1.0, 3)
   }
 }
 
@@ -298,9 +331,9 @@ export function applySaturation(buffer: OptimizedBuffer, cellMask?: Float32Array
 
   // If no cellMask provided, use uniform saturation (much faster)
   if (!cellMask || cellMask.length === 0) {
-    buffer.colorMatrixUniform(matrix, 1.0)
+    buffer.colorMatrixUniform(matrix, 1.0, 3)
   } else {
-    buffer.colorMatrix(matrix, cellMask, 1.0)
+    buffer.colorMatrix(matrix, cellMask, 1.0, 3)
   }
 }
 
@@ -380,7 +413,7 @@ export class GrayscaleEffect {
     if (this._strength === 0) {
       return
     }
-    buffer.colorMatrixUniform(this.grayscaleMatrix, 1.0)
+    buffer.colorMatrixUniform(this.grayscaleMatrix, 1.0, 3)
   }
 }
 

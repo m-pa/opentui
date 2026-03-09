@@ -247,8 +247,14 @@ export class OptimizedBuffer {
    *    r->a, g->a, b->a, a->a]  // Row 3: Alpha output coefficients (usually [0,0,0,1])
    * @param cellMask - Array of [x, y, strength] cell masks for per-pixel application
    * @param strength - Optional global strength multiplier (defaults to 1.0)
+   * @param target - Optional target buffer(s): 1=FG, 2=BG, 3=Both (default: 3)
    */
-  public colorMatrix(matrix: number[] | Float32Array, cellMask: number[] | Float32Array, strength: number = 1.0): void {
+  public colorMatrix(
+    matrix: number[] | Float32Array,
+    cellMask: number[] | Float32Array,
+    strength: number = 1.0,
+    target: 1 | 2 | 3 = 3,
+  ): void {
     this.guard()
     const matrixArray = matrix instanceof Float32Array ? matrix : new Float32Array(matrix)
     if (matrixArray.length !== 16) {
@@ -266,7 +272,7 @@ export class OptimizedBuffer {
     }
 
     const cellMaskCount = Math.floor(cellMaskArray.length / 3)
-    this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrixArray), ptr(cellMaskArray), cellMaskCount, strength)
+    this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrixArray), ptr(cellMaskArray), cellMaskCount, strength, target)
   }
 
   /**
@@ -277,15 +283,16 @@ export class OptimizedBuffer {
    *    r->b, g->b, b->b, a->b,  // Row 2: Blue output coefficients
    *    r->a, g->a, b->a, a->a]  // Row 3: Alpha output coefficients (usually [0,0,0,1])
    * @param strength - Optional strength multiplier (0.0 = no effect, 1.0 = full matrix, defaults to 1.0)
+   * @param target - Optional target buffer(s): 1=FG, 2=BG, 3=Both (default: 3)
    */
-  public colorMatrixUniform(matrix: number[] | Float32Array, strength: number = 1.0): void {
+  public colorMatrixUniform(matrix: number[] | Float32Array, strength: number = 1.0, target: 1 | 2 | 3 = 3): void {
     this.guard()
     const matrixArray = matrix instanceof Float32Array ? matrix : new Float32Array(matrix)
     if (matrixArray.length !== 16) {
       throw new Error("Color matrix must be a 4x4 RGBA matrix (16 values)")
     }
     if (strength === 0.0) return
-    this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrixArray), strength)
+    this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrixArray), strength, target)
   }
 
   public drawText(

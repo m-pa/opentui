@@ -324,6 +324,6 @@ export class VignetteEffect {
     // colorMatrix blends: result = original + (transformed - original) × strength
     // With zero matrix: transformed = 0
     // Result = original + (0 - original) × attenuation = original × (1 - attenuation)
-    buffer.colorMatrix(VignetteEffect.zeroMatrix, this.precomputedAttenuationCellMask!)
+    buffer.colorMatrix(VignetteEffect.zeroMatrix, this.precomputedAttenuationCellMask!, 1.0, 3)
   }
 }
