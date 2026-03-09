@@ -546,3 +546,121 @@ export class CloudsEffect {
     }
   }
 }
+
+/**
+ * Applies animated flames rising from the bottom using Perlin noise.
+ * Creates warm fire effect that fades as it rises.
+ */
+export class FlamesEffect {
+  private noise: PerlinNoise
+  private _scale: number
+  private _speed: number
+  private _intensity: number
+  private time: number = 0
+
+  constructor(scale: number = 0.03, speed: number = 0.02, intensity: number = 0.8) {
+    this.noise = new PerlinNoise()
+    this._scale = scale
+    this._speed = speed
+    this._intensity = intensity
+  }
+
+  public set scale(newScale: number) {
+    this._scale = Math.max(0.001, newScale)
+  }
+  public get scale(): number {
+    return this._scale
+  }
+
+  public set speed(newSpeed: number) {
+    this._speed = Math.max(0, newSpeed)
+  }
+  public get speed(): number {
+    return this._speed
+  }
+
+  public set intensity(newIntensity: number) {
+    this._intensity = Math.max(0, Math.min(1, newIntensity))
+  }
+  public get intensity(): number {
+    return this._intensity
+  }
+
+  /**
+   * Applies flame effect rising from bottom using Perlin noise.
+   * Flames get cooler (redder) and fade as they rise.
+   */
+  public apply(buffer: OptimizedBuffer, deltaTime: number): void {
+    const width = buffer.width
+    const height = buffer.height
+    const bg = buffer.buffers.bg
+
+    // Update time for animation
+    this.time += deltaTime * this._speed
+
+    const scale = this._scale
+    const timeOffset = this.time
+
+    for (let y = 0; y < height; y++) {
+      // Calculate height factor - stronger at bottom (1.0), fading toward top (0.0)
+      const heightFactor = 1.0 - y / height
+
+      for (let x = 0; x < width; x++) {
+        // FBM - combine multiple octaves for organic flame detail
+        let noiseValue = 0
+        let amplitude = 1
+        let frequency = 1
+        let maxValue = 0
+
+        // 3 octaves of noise for flames
+        for (let i = 0; i < 3; i++) {
+          // Flip y coordinate so flames rise from bottom
+          const nx = (x * scale * frequency + timeOffset) * 0.5
+          const ny = (height - y) * scale * frequency * 2 * 0.5
+          const nz = timeOffset * 2.0 // Faster z evolution for more flicker
+
+          noiseValue += this.noise.noise3d(nx, ny, nz) * amplitude
+          maxValue += amplitude
+          amplitude *= 0.5
+          frequency *= 2
+        }
+
+        // Normalize to [0, 1]
+        noiseValue = (noiseValue / maxValue + 1) * 0.5
+
+        // Combine with height factor for rising fade effect
+        const flameIntensity = noiseValue * heightFactor * this._intensity
+
+        if (flameIntensity > 0) {
+          const colorIndex = (y * width + x) * 4
+
+          // Fire color gradient based on intensity
+          // High intensity = white/yellow (hottest), low = red (coolest)
+          let r: number, g: number, b: number
+
+          if (flameIntensity > 0.7) {
+            // White/yellow hot core
+            r = 1.0
+            g = 1.0
+            b = 0.3 + (flameIntensity - 0.7) * 2.3 // 0.3 to 1.0
+          } else if (flameIntensity > 0.4) {
+            // Orange
+            r = 1.0
+            g = 0.5 + (flameIntensity - 0.4) * 1.67 // 0.5 to 1.0
+            b = 0.0
+          } else {
+            // Red fading to dark
+            r = 0.3 + flameIntensity * 1.75 // 0.3 to 1.0
+            g = flameIntensity * 0.5 // 0.0 to 0.2
+            b = 0.0
+          }
+
+          // Blend with existing background
+          bg[colorIndex] = Math.max(bg[colorIndex], r * flameIntensity)
+          bg[colorIndex + 1] = Math.max(bg[colorIndex + 1], g * flameIntensity)
+          bg[colorIndex + 2] = Math.max(bg[colorIndex + 2], b * flameIntensity)
+        }
+      }
+    }
+  }
+}

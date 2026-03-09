@@ -23,7 +23,7 @@ import {
   AmbientLight,
 } from "three"
 import * as Filters from "../post/filters"
-import { DistortionEffect, VignetteEffect, GrayscaleEffect, CloudsEffect } from "../post/filters"
+import { DistortionEffect, VignetteEffect, GrayscaleEffect, CloudsEffect, FlamesEffect } from "../post/filters"
 import * as Matrices from "../post/matrices"
 import type { OptimizedBuffer } from "../buffer"
 import { ThreeCliRenderer } from "../3d"
@@ -42,6 +42,7 @@ interface ShaderCubeDemoState {
   distortionEffectInstance: DistortionEffect
   vignetteEffectInstance: VignetteEffect
   cloudsEffectInstance: CloudsEffect
+  flamesEffectInstance: FlamesEffect
   brightnessValue: number
   gainValue: number
   grayscaleEffectInstance: GrayscaleEffect
@@ -103,6 +104,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
   const distortionEffectInstance = new DistortionEffect()
   const vignetteEffectInstance = new VignetteEffect()
   const cloudsEffectInstance = new CloudsEffect(0.27, 0.001, 0.75, 1.0)
+  const flamesEffectInstance = new FlamesEffect(0.04, 0.02, 0.9)
 
   // Simple value-based brightness and gain (no class instances)
   let brightnessValue = 0.0
@@ -186,6 +188,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "ASCII Art", func: (buf, _dt) => Filters.applyAsciiArt(buf) },
     { name: "Distortion", func: distortionEffectInstance.apply.bind(distortionEffectInstance) },
     { name: "Clouds", func: cloudsEffectInstance.apply.bind(cloudsEffectInstance) },
+    { name: "Flames", func: flamesEffectInstance.apply.bind(flamesEffectInstance) },
     { name: "Brightness", func: (buf, _dt) => Filters.applyBrightness(buf, brightnessValue) },
     { name: "Gain", func: (buf, _dt) => Filters.applyGain(buf, gainValue) },
     {
@@ -488,11 +491,17 @@ export async function run(renderer: CliRenderer): Promise<void> {
         param1Visible = true
         param2StatusText.visible = true
         break
+      case "Flames":
+        param1Text = `Flames: scale=${flamesEffectInstance.scale.toFixed(3)} ([/] to adjust)`
+        param2StatusText.content = `speed=${flamesEffectInstance.speed.toFixed(3)} ({/} to adjust)`
+        param1Visible = true
+        param2StatusText.visible = true
+        break
     }
 
     param1StatusText.content = param1Text
     param1StatusText.visible = param1Visible
-    if (selectedFilter.name !== "Clouds") {
+    if (selectedFilter.name !== "Clouds" && selectedFilter.name !== "Flames") {
       param2StatusText.content = ""
       param2StatusText.visible = false
     }
@@ -681,6 +690,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           cloudsEffectInstance.scale = Math.max(0.05, cloudsEffectInstance.scale - 0.01)
           paramChanged = true
           break
+        case "Flames":
+          flamesEffectInstance.scale = Math.max(0.01, flamesEffectInstance.scale - 0.002)
+          paramChanged = true
+          break
       }
     } else if (key.name === "]") {
       switch (currentFilterName) {
@@ -715,6 +728,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           cloudsEffectInstance.scale = Math.min(1.0, cloudsEffectInstance.scale + 0.01)
           paramChanged = true
           break
+        case "Flames":
+          flamesEffectInstance.scale = Math.min(0.1, flamesEffectInstance.scale + 0.002)
+          paramChanged = true
+          break
       }
     }
 
@@ -729,6 +746,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           cloudsEffectInstance.speed = Math.max(0.0, cloudsEffectInstance.speed - 0.001)
           paramChanged = true
           break
+        case "Flames":
+          flamesEffectInstance.speed = Math.max(0.005, flamesEffectInstance.speed - 0.001)
+          paramChanged = true
+          break
       }
     } else if (key.name === "}") {
       switch (currentFilterName) {
@@ -738,6 +759,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           break
         case "Clouds":
           cloudsEffectInstance.speed = Math.min(0.02, cloudsEffectInstance.speed + 0.001)
+          paramChanged = true
+          break
+        case "Flames":
+          flamesEffectInstance.speed = Math.min(0.1, flamesEffectInstance.speed + 0.001)
           paramChanged = true
           break
       }
@@ -824,6 +849,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     distortionEffectInstance,
     vignetteEffectInstance,
     cloudsEffectInstance,
+    flamesEffectInstance,
     brightnessValue,
     gainValue,
     grayscaleEffectInstance,
