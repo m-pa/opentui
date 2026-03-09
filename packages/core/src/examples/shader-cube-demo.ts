@@ -199,6 +199,14 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Flames", func: flamesEffectInstance.apply.bind(flamesEffectInstance) },
     { name: "Rainbow Text", func: rainbowTextEffectInstance.apply.bind(rainbowTextEffectInstance) },
     { name: "CRT Rolling Bar", func: crtRollingBarEffectInstance.apply.bind(crtRollingBarEffectInstance) },
+    {
+      name: "Pipboy",
+      func: (buf, dt) => {
+        vignetteEffectInstance.apply(buf)
+        buf.colorMatrixUniform(Matrices.GREENSCALE_MATRIX, 1.0)
+        crtRollingBarEffectInstance.apply(buf, dt)
+      },
+    },
     { name: "Brightness", func: (buf, _dt) => Filters.applyBrightness(buf, brightnessValue) },
     { name: "Gain", func: (buf, _dt) => Filters.applyGain(buf, gainValue) },
     {
@@ -527,7 +535,8 @@ export async function run(renderer: CliRenderer): Promise<void> {
       selectedFilter.name !== "Clouds" &&
       selectedFilter.name !== "Flames" &&
       selectedFilter.name !== "Rainbow Text" &&
-      selectedFilter.name !== "CRT Rolling Bar"
+      selectedFilter.name !== "CRT Rolling Bar" &&
+      selectedFilter.name !== "Pipboy"
     ) {
       param2StatusText.content = ""
       param2StatusText.visible = false
