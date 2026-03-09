@@ -106,28 +106,28 @@ export async function run(renderer: CliRenderer): Promise<void> {
   let brightnessValue = 1.0
   let gainValue = 1.0
 
-  // Helper function to create right-half triplets for selective saturation
-  function createRightHalfTriplets(width: number, height: number): Float32Array {
+  // Helper function to create right-half cell masks for selective saturation
+  function createRightHalfCellMask(width: number, height: number): Float32Array {
     const rightHalfWidth = Math.floor(width / 2)
     const rightHalfPixels = rightHalfWidth * height
-    const triplets = new Float32Array(rightHalfPixels * 3)
+    const cellMask = new Float32Array(rightHalfPixels * 3)
     let i = 0
     for (let y = 0; y < height; y++) {
       for (let x = Math.floor(width / 2); x < width; x++) {
-        triplets[i++] = x
-        triplets[i++] = y
-        triplets[i++] = 1
+        cellMask[i++] = x
+        cellMask[i++] = y
+        cellMask[i++] = 1
       }
     }
-    return triplets
+    return cellMask
   }
 
-  // Full screen saturation mode toggle (null triplets = uniform)
+  // Full screen saturation mode toggle (null cellMask = uniform)
   let saturationFullScreen = false
 
   // Saturation state variables
   let saturationValue = 1.0
-  let saturationTriplets: Float32Array | null = createRightHalfTriplets(WIDTH, HEIGHT)
+  let saturationCellMask: Float32Array | null = createRightHalfCellMask(WIDTH, HEIGHT)
 
   const grayscaleEffectInstance = new GrayscaleEffect()
 
@@ -183,7 +183,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Distortion", func: distortionEffectInstance.apply.bind(distortionEffectInstance) },
     { name: "Brightness", func: (buf, _dt) => Filters.brightness(buf, brightnessValue) },
     { name: "Gain", func: (buf, _dt) => Filters.gain(buf, gainValue) },
-    { name: "Saturation", func: (buf, _dt) => buf.saturate(saturationValue, saturationTriplets ?? undefined) },
+    { name: "Saturation", func: (buf, _dt) => buf.saturate(saturationValue, saturationCellMask ?? undefined) },
   ]
 
   // Box in the background to show alpha channel works
@@ -618,11 +618,11 @@ export async function run(renderer: CliRenderer): Promise<void> {
     if (key.name === "t" && filterFunctions[currentFilterIndex].name === "Saturation") {
       saturationFullScreen = !saturationFullScreen
       if (saturationFullScreen) {
-        // null triplets = uniform saturation (uses colorMatrixUniform, much faster)
-        saturationTriplets = null
+        // null cellMask = uniform saturation (uses colorMatrixUniform, much faster)
+        saturationCellMask = null
       } else {
-        // triplets = selective saturation on right half
-        saturationTriplets = createRightHalfTriplets(renderer.terminalWidth, renderer.terminalHeight)
+        // cellMask = selective saturation on right half
+        saturationCellMask = createRightHalfCellMask(renderer.terminalWidth, renderer.terminalHeight)
       }
       paramChanged = true
     }

@@ -254,8 +254,8 @@ export class DistortionEffect {
  */
 export class VignetteEffect {
   private _strength: number
-  // Stores packed triplets [x, y, attenuation] per pixel
-  private precomputedAttenuationTriplets: Float32Array | null = null
+  // Stores packed cell masks [x, y, attenuation] per pixel
+  private precomputedAttenuationCellMask: Float32Array | null = null
   private cachedWidth: number = -1
   private cachedHeight: number = -1
   // Zero matrix for attenuation (maps everything toward black based on strength)
@@ -267,10 +267,10 @@ export class VignetteEffect {
 
   public set strength(newStrength: number) {
     this._strength = Math.max(0, newStrength) // Ensure strength is non-negative
-    // Invalidate cached triplets when strength changes
+    // Invalidate cached cell masks when strength changes
     this.cachedWidth = -1
     this.cachedHeight = -1
-    this.precomputedAttenuationTriplets = null
+    this.precomputedAttenuationCellMask = null
   }
 
   public get strength(): number {
@@ -278,7 +278,7 @@ export class VignetteEffect {
   }
 
   private _computeFactors(width: number, height: number): void {
-    this.precomputedAttenuationTriplets = new Float32Array(width * height * 3)
+    this.precomputedAttenuationCellMask = new Float32Array(width * height * 3)
     const centerX = width / 2
     const centerY = height / 2
     const maxDistSq = centerX * centerX + centerY * centerY
@@ -296,9 +296,9 @@ export class VignetteEffect {
         const baseAttenuation = Math.min(1, distSq / safeMaxDistSq)
         // Precompute final attenuation value including strength
         const attenuation = baseAttenuation * strength
-        this.precomputedAttenuationTriplets[i++] = x
-        this.precomputedAttenuationTriplets[i++] = y
-        this.precomputedAttenuationTriplets[i++] = attenuation
+        this.precomputedAttenuationCellMask[i++] = x
+        this.precomputedAttenuationCellMask[i++] = y
+        this.precomputedAttenuationCellMask[i++] = attenuation
       }
     }
     this.cachedWidth = width
@@ -307,16 +307,16 @@ export class VignetteEffect {
 
   /**
    * Applies the vignette effect using native colorMatrix with a zero matrix.
-   * The zero matrix maps all colors to black, and the attenuation triplets
+   * The zero matrix maps all colors to black, and the attenuation cell masks
    * control how much of the effect is applied (strength-based blending).
    */
   public apply(buffer: OptimizedBuffer): void {
     const width = buffer.width
     const height = buffer.height
 
-    // Recompute attenuation triplets if dimensions changed, strength changed,
+    // Recompute attenuation cell masks if dimensions changed, strength changed,
     // or factors haven't been computed yet
-    if (width !== this.cachedWidth || height !== this.cachedHeight || !this.precomputedAttenuationTriplets) {
+    if (width !== this.cachedWidth || height !== this.cachedHeight || !this.precomputedAttenuationCellMask) {
       this._computeFactors(width, height)
     }
 
@@ -324,6 +324,6 @@ export class VignetteEffect {
     // colorMatrix blends: result = original + (transformed - original) × strength
     // With zero matrix: transformed = 0
     // Result = original + (0 - original) × attenuation = original × (1 - attenuation)
-    buffer.colorMatrix(VignetteEffect.zeroMatrix, this.precomputedAttenuationTriplets!)
+    buffer.colorMatrix(VignetteEffect.zeroMatrix, this.precomputedAttenuationCellMask!)
   }
 }

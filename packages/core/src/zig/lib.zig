@@ -400,12 +400,12 @@ export fn bufferFillRect(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, wid
     bufferPtr.fillRect(x, y, width, height, rgbaBg) catch {};
 }
 
-export fn bufferColorMatrix(bufferPtr: *buffer.OptimizedBuffer, matrixPtr: [*]const f32, tripletsPtr: [*]const f32, tripletCount: usize) void {
-    if (tripletCount == 0) return;
+export fn bufferColorMatrix(bufferPtr: *buffer.OptimizedBuffer, matrixPtr: [*]const f32, cellMaskPtr: [*]const f32, cellMaskCount: usize) void {
+    if (cellMaskCount == 0) return;
     const matrix = matrixPtr[0..9];
-    const len = tripletCount * 3;
-    const triplets = tripletsPtr[0..len];
-    bufferPtr.colorMatrix(matrix, triplets);
+    const len = cellMaskCount * 3;
+    const cellMask = cellMaskPtr[0..len];
+    bufferPtr.colorMatrix(matrix, cellMask);
 }
 
 export fn bufferColorMatrixUniform(bufferPtr: *buffer.OptimizedBuffer, matrixPtr: [*]const f32, strength: f32) void {

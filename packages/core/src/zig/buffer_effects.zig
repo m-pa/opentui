@@ -6,11 +6,11 @@ const RGBA = ansi.RGBA;
 
 /// Apply 3x3 color matrix transformation to RGB values at specified cell coordinates.
 /// matrix: [m00, m01, m02, m10, m11, m12, m20, m21, m22] - 9 values in row-major order
-/// triplets format: [x, y, strength, x, y, strength, ...]
+/// cellMask format: [x, y, strength, x, y, strength, ...]
 /// strength: multiplier applied to matrix effect (0.0 = no effect, 1.0 = full matrix)
 /// No clamping is performed - output values may exceed [0, 1] range
-pub fn colorMatrix(self: anytype, matrix: []const f32, triplets: []const f32) void {
-    if (matrix.len < 9 or triplets.len < 3) return;
+pub fn colorMatrix(self: anytype, matrix: []const f32, cellMask: []const f32) void {
+    if (matrix.len < 9 or cellMask.len < 3) return;
 
     const width = self.width;
     const height = self.height;
@@ -30,12 +30,12 @@ pub fn colorMatrix(self: anytype, matrix: []const f32, triplets: []const f32) vo
     const m21 = matrix[7];
     const m22 = matrix[8];
 
-    const len = triplets.len - (triplets.len % 3);
+    const len = cellMask.len - (cellMask.len % 3);
     var i: usize = 0;
     while (i < len) : (i += 3) {
-        const x_f = triplets[i];
-        const y_f = triplets[i + 1];
-        const strength = triplets[i + 2];
+        const x_f = cellMask[i];
+        const y_f = cellMask[i + 1];
+        const strength = cellMask[i + 2];
 
         if (!math.isFinite(x_f) or !math.isFinite(y_f) or !math.isFinite(strength)) continue;
         if (x_f < 0 or y_f < 0 or x_f >= width_f or y_f >= height_f) continue;

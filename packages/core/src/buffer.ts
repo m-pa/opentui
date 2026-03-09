@@ -242,35 +242,35 @@ export class OptimizedBuffer {
   /**
    * Apply a 3x3 color matrix transformation to the buffer.
    * @param matrix - 9 values representing a 3x3 matrix in row-major order [m00, m01, m02, m10, m11, m12, m20, m21, m22]
-   * @param triplets - Array of [x, y, strength] triplets for per-pixel application
+   * @param cellMask - Array of [x, y, strength] cell masks for per-pixel application
    * @param strength - Optional global strength multiplier (defaults to 1.0)
    */
-  public colorMatrix(matrix: number[] | Float32Array, triplets: number[] | Float32Array, strength: number = 1.0): void {
+  public colorMatrix(matrix: number[] | Float32Array, cellMask: number[] | Float32Array, strength: number = 1.0): void {
     this.guard()
     const matrixArray = matrix instanceof Float32Array ? matrix : new Float32Array(matrix)
     if (matrixArray.length !== 9) {
       throw new Error("Color matrix must be a 3x3 matrix (9 values)")
     }
 
-    let tripletsArray: Float32Array
-    if (triplets instanceof Float32Array) {
-      tripletsArray = triplets
+    let cellMaskArray: Float32Array
+    if (cellMask instanceof Float32Array) {
+      cellMaskArray = cellMask
     } else {
-      if (triplets.length === 0 || triplets.length % 3 !== 0) {
-        throw new Error("Triplets must be an array of [x, y, strength] values")
+      if (cellMask.length === 0 || cellMask.length % 3 !== 0) {
+        throw new Error("Cell mask must be an array of [x, y, strength] values")
       }
-      tripletsArray = new Float32Array(triplets)
+      cellMaskArray = new Float32Array(cellMask)
     }
 
-    // Apply strength to each triplet
+    // Apply strength to each cell mask entry
     if (strength !== 1.0) {
-      for (let i = 2; i < tripletsArray.length; i += 3) {
-        tripletsArray[i] *= strength
+      for (let i = 2; i < cellMaskArray.length; i += 3) {
+        cellMaskArray[i] *= strength
       }
     }
 
-    const tripletCount = Math.floor(tripletsArray.length / 3)
-    this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrixArray), ptr(tripletsArray), tripletCount)
+    const cellMaskCount = Math.floor(cellMaskArray.length / 3)
+    this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrixArray), ptr(cellMaskArray), cellMaskCount)
   }
 
   /**
@@ -569,10 +569,10 @@ export class OptimizedBuffer {
   /**
    * Apply a brightness adjustment to the buffer using a color matrix.
    * @param brightness - brightness factor: <1.0 darkens, 1.0 unchanged, >1.0 brightens
-   * @param triplets - Optional array of [x, y, strength] triplets for selective brightness.
+   * @param cellMask - Optional array of [x, y, strength] cell masks for selective brightness.
    *                   If not provided, applies uniform brightness to entire buffer.
    */
-  public brightness(brightness: number = 1.0, triplets?: Float32Array): void {
+  public brightness(brightness: number = 1.0, cellMask?: Float32Array): void {
     this.guard()
     if (brightness === 1.0) return
 
@@ -589,21 +589,21 @@ export class OptimizedBuffer {
       b, // Row 2 (Blue output)
     ])
 
-    if (!triplets || triplets.length === 0) {
+    if (!cellMask || cellMask.length === 0) {
       this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrix), 1.0)
     } else {
-      const tripletCount = Math.floor(triplets.length / 3)
-      this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(triplets), tripletCount)
+      const cellMaskCount = Math.floor(cellMask.length / 3)
+      this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(cellMask), cellMaskCount)
     }
   }
 
   /**
    * Apply a gain adjustment to the buffer using a color matrix.
    * @param gain - gain factor: <1.0 reduces, 1.0 unchanged, >1.0 amplifies
-   * @param triplets - Optional array of [x, y, strength] triplets for selective gain.
+   * @param cellMask - Optional array of [x, y, strength] cell masks for selective gain.
    *                   If not provided, applies uniform gain to entire buffer.
    */
-  public gain(gain: number = 1.0, triplets?: Float32Array): void {
+  public gain(gain: number = 1.0, cellMask?: Float32Array): void {
     this.guard()
     if (gain === 1.0) return
 
@@ -620,29 +620,29 @@ export class OptimizedBuffer {
       g, // Row 2 (Blue output)
     ])
 
-    if (!triplets || triplets.length === 0) {
+    if (!cellMask || cellMask.length === 0) {
       this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrix), 1.0)
     } else {
-      const tripletCount = Math.floor(triplets.length / 3)
-      this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(triplets), tripletCount)
+      const cellMaskCount = Math.floor(cellMask.length / 3)
+      this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(cellMask), cellMaskCount)
     }
   }
 
   /**
    * Apply a saturation adjustment to the buffer using a color matrix.
    * @param saturation - 0.0 = grayscale, 1.0 = unchanged, >1.0 = oversaturated
-   * @param triplets - Optional array of [x, y, strength] triplets for selective saturation.
+   * @param cellMask - Optional array of [x, y, strength] cell masks for selective saturation.
    *                   If not provided, applies uniform saturation to entire buffer.
    */
-  public saturate(saturation: number = 1.0, triplets?: Float32Array): void {
+  public saturate(saturation: number = 1.0, cellMask?: Float32Array): void {
     this.guard()
     if (saturation === 1.0) return
     const matrix = this.createSaturationMatrix(saturation)
-    if (!triplets || triplets.length === 0) {
+    if (!cellMask || cellMask.length === 0) {
       this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrix), 1.0)
     } else {
-      const tripletCount = Math.floor(triplets.length / 3)
-      this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(triplets), tripletCount)
+      const cellMaskCount = Math.floor(cellMask.length / 3)
+      this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(cellMask), cellMaskCount)
     }
   }
 

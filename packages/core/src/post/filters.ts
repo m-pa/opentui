@@ -56,22 +56,22 @@ export function applyNoise(buffer: OptimizedBuffer, strength: number = 0.1): voi
   // Skip if no effect
   if (strength === 0) return
 
-  // Generate random triplets with per-pixel strength values
+  // Generate random cellMask with per-pixel strength values
   // Each pixel gets [x, y, random_strength] where random_strength ranges from -1 to 1
-  const triplets = new Float32Array(size * 3)
-  let tripletIndex = 0
+  const cellMask = new Float32Array(size * 3)
+  let cellMaskIndex = 0
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      triplets[tripletIndex++] = x
-      triplets[tripletIndex++] = y
+      cellMask[cellMaskIndex++] = x
+      cellMask[cellMaskIndex++] = y
       // Random strength from -1 to 1
-      triplets[tripletIndex++] = (Math.random() - 0.5) * 2
+      cellMask[cellMaskIndex++] = (Math.random() - 0.5) * 2
     }
   }
 
   // Brightness matrix: scales all channels by (1 + strength)
-  // With triplet strength S, result = original * (1 + (B - 1) * S)
+  // With cellMask strength S, result = original * (1 + (B - 1) * S)
   // where B = 1 + strength
   // So: S=1 → original * (1 + strength), S=-1 → original * (1 - strength)
   const b = 1.0 + strength
@@ -87,7 +87,7 @@ export function applyNoise(buffer: OptimizedBuffer, strength: number = 0.1): voi
     b, // Row 2 (Blue output)
   ])
 
-  buffer.colorMatrix(matrix, triplets, 1.0)
+  buffer.colorMatrix(matrix, cellMask, 1.0)
 }
 
 /**
@@ -152,10 +152,10 @@ export function applyAsciiArt(buffer: OptimizedBuffer, ramp: string = " .:-=+*#%
  * Brightness multiplies all RGB channels by the brightness factor with clamping to [0, 1].
  * @param buffer - The buffer to apply the effect to
  * @param brightness - brightness factor: <1.0 darkens, 1.0 unchanged, >1.0 brightens
- * @param triplets - Optional array of [x, y, strength] triplets for selective brightness.
+ * @param cellMask - Optional array of [x, y, strength] cell masks for selective brightness.
  *                   If not provided, applies uniform brightness to entire buffer.
  */
-export function brightness(buffer: OptimizedBuffer, brightness: number = 1.0, triplets?: Float32Array): void {
+export function brightness(buffer: OptimizedBuffer, brightness: number = 1.0, cellMask?: Float32Array): void {
   // No need to process if brightness is 1 (no change)
   if (brightness === 1.0) return
 
@@ -172,11 +172,11 @@ export function brightness(buffer: OptimizedBuffer, brightness: number = 1.0, tr
     b, // Row 2 (Blue output)
   ])
 
-  if (!triplets || triplets.length === 0) {
+  if (!cellMask || cellMask.length === 0) {
     buffer.colorMatrixUniform(matrix, 1.0)
   } else {
-    const tripletCount = Math.floor(triplets.length / 3)
-    buffer.colorMatrix(matrix, triplets, 1.0)
+    const cellMaskCount = Math.floor(cellMask.length / 3)
+    buffer.colorMatrix(matrix, cellMask, 1.0)
   }
 }
 
@@ -185,10 +185,10 @@ export function brightness(buffer: OptimizedBuffer, brightness: number = 1.0, tr
  * Gain multiplies all RGB channels by the gain factor (no clamping).
  * @param buffer - The buffer to apply the effect to
  * @param gain - gain factor: <1.0 reduces, 1.0 unchanged, >1.0 amplifies
- * @param triplets - Optional array of [x, y, strength] triplets for selective gain.
+ * @param cellMask - Optional array of [x, y, strength] cell masks for selective gain.
  *                   If not provided, applies uniform gain to entire buffer.
  */
-export function gain(buffer: OptimizedBuffer, gain: number = 1.0, triplets?: Float32Array): void {
+export function gain(buffer: OptimizedBuffer, gain: number = 1.0, cellMask?: Float32Array): void {
   // No need to process if gain is 1 (no change)
   if (gain === 1.0) return
 
@@ -205,11 +205,11 @@ export function gain(buffer: OptimizedBuffer, gain: number = 1.0, triplets?: Flo
     g, // Row 2 (Blue output)
   ])
 
-  if (!triplets || triplets.length === 0) {
+  if (!cellMask || cellMask.length === 0) {
     buffer.colorMatrixUniform(matrix, 1.0)
   } else {
-    const tripletCount = Math.floor(triplets.length / 3)
-    buffer.colorMatrix(matrix, triplets, 1.0)
+    const cellMaskCount = Math.floor(cellMask.length / 3)
+    buffer.colorMatrix(matrix, cellMask, 1.0)
   }
 }
 
@@ -245,11 +245,11 @@ function createSaturationMatrix(saturation: number): Float32Array {
 /**
  * Applies a saturation adjustment to the buffer.
  * @param buffer - The buffer to apply the effect to
- * @param triplets - Optional array of [x, y, strength] triplets for selective saturation.
+ * @param cellMask - Optional array of [x, y, strength] cell masks for selective saturation.
  *                   If not provided, applies uniform saturation to entire buffer.
  * @param strength - Saturation factor: 0.0 = grayscale, 1.0 = unchanged, >1.0 = oversaturated
  */
-export function saturate(buffer: OptimizedBuffer, triplets?: Float32Array, strength: number = 1.0): void {
+export function saturate(buffer: OptimizedBuffer, cellMask?: Float32Array, strength: number = 1.0): void {
   // No need to process if saturation is 1 (no change) or strength is 0
   if (strength === 1.0 || strength === 0) {
     return
@@ -257,17 +257,17 @@ export function saturate(buffer: OptimizedBuffer, triplets?: Float32Array, stren
 
   const matrix = createSaturationMatrix(strength)
 
-  // If no triplets provided, use uniform saturation (much faster)
-  if (!triplets || triplets.length === 0) {
+  // If no cellMask provided, use uniform saturation (much faster)
+  if (!cellMask || cellMask.length === 0) {
     buffer.colorMatrixUniform(matrix, 1.0)
   } else {
-    buffer.colorMatrix(matrix, triplets, 1.0)
+    buffer.colorMatrix(matrix, cellMask, 1.0)
   }
 }
 
 /**
  * Converts the buffer colors to grayscale using native colorMatrixUniform.
- * Much faster than SaturationEffect as it skips triplet creation and iteration.
+ * Much faster than SaturationEffect as it skips cell mask creation and iteration.
  */
 export class GrayscaleEffect {
   private _strength: number
