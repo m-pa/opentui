@@ -23,7 +23,7 @@ import {
   AmbientLight,
 } from "three"
 import * as Filters from "../post/filters"
-import { DistortionEffect, VignetteEffect, BloomEffect, GrayscaleEffect } from "../post/filters"
+import { DistortionEffect, VignetteEffect, GrayscaleEffect } from "../post/filters"
 import * as Matrices from "../post/matrices"
 import type { OptimizedBuffer } from "../buffer"
 import { ThreeCliRenderer } from "../3d"
@@ -43,10 +43,6 @@ interface ShaderCubeDemoState {
   vignetteEffectInstance: VignetteEffect
   brightnessValue: number
   gainValue: number
-  bloomEffectInstance: BloomEffect
-  saturationValue: number
-  saturationTriplets: Float32Array | null
-  saturationFullScreen: boolean
   grayscaleEffectInstance: GrayscaleEffect
   colorMatrixEffectInstance: ColorMatrixEffect
   filterFunctions: { name: string; func: ((buffer: OptimizedBuffer, deltaTime: number) => void) | null }[]
@@ -129,10 +125,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
   // Full screen saturation mode toggle (null triplets = uniform)
   let saturationFullScreen = false
 
-  const bloomEffectInstance = new BloomEffect(0.7, 0.3, 2)
   // Saturation state variables
   let saturationValue = 1.0
   let saturationTriplets: Float32Array | null = createRightHalfTriplets(WIDTH, HEIGHT)
+
   const grayscaleEffectInstance = new GrayscaleEffect()
 
   // Registry of all available color matrices with their display names
@@ -184,7 +180,6 @@ export async function run(renderer: CliRenderer): Promise<void> {
     { name: "Noise", func: (buf, _dt) => Filters.applyNoise(buf, 0.05) },
     { name: "Chromatic Aberration", func: (buf, _dt) => Filters.applyChromaticAberration(buf, 2) },
     { name: "ASCII Art", func: (buf, _dt) => Filters.applyAsciiArt(buf) },
-    { name: "Bloom", func: bloomEffectInstance.apply.bind(bloomEffectInstance) },
     { name: "Distortion", func: distortionEffectInstance.apply.bind(distortionEffectInstance) },
     { name: "Brightness", func: (buf, _dt) => Filters.brightness(buf, brightnessValue) },
     { name: "Gain", func: (buf, _dt) => Filters.gain(buf, gainValue) },
@@ -471,10 +466,6 @@ export async function run(renderer: CliRenderer): Promise<void> {
         param1Text = `Gain Factor: ${gainValue.toFixed(2)} ([/])`
         param1Visible = true
         break
-      case "Bloom":
-        param1Text = `Bloom Strength: ${bloomEffectInstance.strength.toFixed(2)} ([/])`
-        param1Visible = true
-        break
       case "Saturation":
         param1Text = `Saturation: ${saturationValue.toFixed(2)} (T: ${saturationFullScreen ? "Full" : "Half"}) ([/])`
         param1Visible = true
@@ -624,7 +615,6 @@ export async function run(renderer: CliRenderer): Promise<void> {
       updateParameterUI()
     }
 
-    // Toggle saturation mode between half-screen and full-screen
     if (key.name === "t" && filterFunctions[currentFilterIndex].name === "Saturation") {
       saturationFullScreen = !saturationFullScreen
       if (saturationFullScreen) {
@@ -663,10 +653,6 @@ export async function run(renderer: CliRenderer): Promise<void> {
           gainValue = Math.max(0, gainValue - 0.05)
           paramChanged = true
           break
-        case "Bloom":
-          bloomEffectInstance.strength = Math.max(0, bloomEffectInstance.strength - 0.05)
-          paramChanged = true
-          break
         case "Saturation":
           saturationValue = Math.max(0, saturationValue - 0.05)
           paramChanged = true
@@ -697,10 +683,6 @@ export async function run(renderer: CliRenderer): Promise<void> {
           gainValue = Math.min(50, gainValue + 0.05)
           paramChanged = true
           break
-        case "Bloom":
-          bloomEffectInstance.strength = Math.min(25, bloomEffectInstance.strength + 0.05)
-          paramChanged = true
-          break
         case "Saturation":
           saturationValue = Math.min(10, saturationValue + 0.05)
           paramChanged = true
@@ -719,19 +701,11 @@ export async function run(renderer: CliRenderer): Promise<void> {
           distortionEffectInstance.maxGlitchLines = Math.max(0, distortionEffectInstance.maxGlitchLines - 1)
           paramChanged = true
           break
-        case "Bloom":
-          bloomEffectInstance.radius = Math.max(0, bloomEffectInstance.radius - 1)
-          paramChanged = true
-          break
       }
     } else if (key.name === "}") {
       switch (currentFilterName) {
         case "Distortion":
           distortionEffectInstance.maxGlitchLines = Math.min(height - 1, distortionEffectInstance.maxGlitchLines + 1)
-          paramChanged = true
-          break
-        case "Bloom":
-          bloomEffectInstance.radius = Math.min(20, bloomEffectInstance.radius + 1)
           paramChanged = true
           break
       }
@@ -819,10 +793,6 @@ export async function run(renderer: CliRenderer): Promise<void> {
     vignetteEffectInstance,
     brightnessValue,
     gainValue,
-    bloomEffectInstance,
-    saturationValue,
-    saturationTriplets,
-    saturationFullScreen,
     grayscaleEffectInstance,
     colorMatrixEffectInstance,
     filterFunctions,
