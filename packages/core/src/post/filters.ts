@@ -56,23 +56,36 @@ export function applyScanlines(buffer: OptimizedBuffer, strength: number = 0.8, 
 }
 
 /**
- * Inverts the colors in the buffer.
+ * Inverts the colors in the buffer using native color matrix.
+ * Uses negative matrix with alpha offset: output = 1.0 - input for each RGB channel.
+ * @param buffer - The buffer to apply the effect to
+ * @param strength - Optional inversion strength: 0.0 = unchanged, 1.0 = full invert (default: 1.0)
  */
-export function applyInvert(buffer: OptimizedBuffer): void {
-  const size = buffer.width * buffer.height
-  const fg = buffer.buffers.fg
-  const bg = buffer.buffers.bg
+export function applyInvert(buffer: OptimizedBuffer, strength: number = 1.0): void {
+  if (strength === 0.0) return
 
-  for (let i = 0; i < size; i++) {
-    const colorIndex = i * 4
-    fg[colorIndex] = 1.0 - fg[colorIndex]
-    fg[colorIndex + 1] = 1.0 - fg[colorIndex + 1]
-    fg[colorIndex + 2] = 1.0 - fg[colorIndex + 2]
+  // Invert matrix: output = -1*input + 1*alpha = 1.0 - input (assuming alpha=1.0)
+  // Row format: [R_coeff, G_coeff, B_coeff, A_coeff]
+  const matrix = new Float32Array([
+    -1,
+    0,
+    0,
+    1, // Row 0: Red output = -1*R + 0*G + 0*B + 1*A = 1 - R
+    0,
+    -1,
+    0,
+    1, // Row 1: Green output = 1 - G
+    0,
+    0,
+    -1,
+    1, // Row 2: Blue output = 1 - B
+    0,
+    0,
+    0,
+    1, // Row 3: Alpha output = A
+  ])
 
-    bg[colorIndex] = 1.0 - bg[colorIndex]
-    bg[colorIndex + 1] = 1.0 - bg[colorIndex + 1]
-    bg[colorIndex + 2] = 1.0 - bg[colorIndex + 2]
-  }
+  buffer.colorMatrixUniform(matrix, strength, 3)
 }
 
 /**
