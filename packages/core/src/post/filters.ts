@@ -1,15 +1,5 @@
 import type { OptimizedBuffer } from "../buffer"
 
-// Re-export effects from effects.ts
-export {
-  DistortionEffect,
-  VignetteEffect,
-  CloudsEffect,
-  FlamesEffect,
-  RainbowTextEffect,
-  CRTRollingBarEffect,
-} from "./effects"
-
 /**
  * Applies a scanline effect by darkening every nth row using native color matrix.
  * Only affects the background buffer to maintain text readability.

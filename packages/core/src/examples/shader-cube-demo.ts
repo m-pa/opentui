@@ -30,7 +30,7 @@ import {
   FlamesEffect,
   RainbowTextEffect,
   CRTRollingBarEffect,
-} from "../post/filters"
+} from "../post/effects"
 import * as Matrices from "../post/matrices"
 import type { OptimizedBuffer } from "../buffer"
 import { ThreeCliRenderer } from "../3d"
