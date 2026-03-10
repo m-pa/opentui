@@ -52,6 +52,8 @@ interface ShaderCubeDemoState {
   flamesEffectInstance: FlamesEffect
   rainbowTextEffectInstance: RainbowTextEffect
   crtRollingBarEffectInstance: CRTRollingBarEffect
+  pipboyVignetteEffectInstance: VignetteEffect
+  pipboyBarEffectInstance: CRTRollingBarEffect
   brightnessValue: number
   gainValue: number
   colorMatrixEffectInstance: ColorMatrixEffect
@@ -115,6 +117,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
   const flamesEffectInstance = new FlamesEffect(0.04, 0.02, 0.9)
   const rainbowTextEffectInstance = new RainbowTextEffect(0.006, 1.0, 1.0, 10.0)
   const crtRollingBarEffectInstance = new CRTRollingBarEffect(0.8, 0.1, 0.4, 0.2)
+
+  // Pipboy-specific instances (decoupled from other effects)
+  const pipboyVignetteEffectInstance = new VignetteEffect(0.75)
+  const pipboyBarEffectInstance = new CRTRollingBarEffect(2.5, 0.08, 0.75, 0.15)
 
   // Simple value-based brightness and gain (no class instances)
   let brightnessValue = 0.0
@@ -202,9 +208,9 @@ export async function run(renderer: CliRenderer): Promise<void> {
     {
       name: "Pipboy",
       func: (buf, dt) => {
-        vignetteEffectInstance.apply(buf)
+        pipboyVignetteEffectInstance.apply(buf)
         buf.colorMatrixUniform(Matrices.GREENSCALE_MATRIX, 1.0)
-        crtRollingBarEffectInstance.apply(buf, dt)
+        pipboyBarEffectInstance.apply(buf, dt)
       },
     },
     { name: "Brightness", func: (buf, _dt) => Filters.applyBrightness(buf, brightnessValue) },
@@ -527,6 +533,12 @@ export async function run(renderer: CliRenderer): Promise<void> {
         param1Visible = true
         param2StatusText.visible = true
         break
+      case "Pipboy":
+        param1Text = `Pipboy: bar speed=${pipboyBarEffectInstance.speed.toFixed(2)} ([/] to adjust)`
+        param2StatusText.content = `vignette=${pipboyVignetteEffectInstance.strength.toFixed(2)} ({/} to adjust)`
+        param1Visible = true
+        param2StatusText.visible = true
+        break
     }
 
     param1StatusText.content = param1Text
@@ -738,6 +750,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           crtRollingBarEffectInstance.speed = Math.max(0.1, crtRollingBarEffectInstance.speed - 0.1)
           paramChanged = true
           break
+        case "Pipboy":
+          pipboyBarEffectInstance.speed = Math.max(0.1, pipboyBarEffectInstance.speed - 0.1)
+          paramChanged = true
+          break
       }
     } else if (key.name === "]") {
       switch (currentFilterName) {
@@ -784,6 +800,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           crtRollingBarEffectInstance.speed = Math.min(5.0, crtRollingBarEffectInstance.speed + 0.1)
           paramChanged = true
           break
+        case "Pipboy":
+          pipboyBarEffectInstance.speed = Math.min(10.0, pipboyBarEffectInstance.speed + 0.1)
+          paramChanged = true
+          break
       }
     }
 
@@ -810,6 +830,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           crtRollingBarEffectInstance.intensity = Math.max(0.0, crtRollingBarEffectInstance.intensity - 0.05)
           paramChanged = true
           break
+        case "Pipboy":
+          pipboyVignetteEffectInstance.strength = Math.max(0.0, pipboyVignetteEffectInstance.strength - 0.05)
+          paramChanged = true
+          break
       }
     } else if (key.name === "}") {
       switch (currentFilterName) {
@@ -831,6 +855,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
           break
         case "CRT Rolling Bar":
           crtRollingBarEffectInstance.intensity = Math.min(1.0, crtRollingBarEffectInstance.intensity + 0.05)
+          paramChanged = true
+          break
+        case "Pipboy":
+          pipboyVignetteEffectInstance.strength = Math.min(3.0, pipboyVignetteEffectInstance.strength + 0.05)
           paramChanged = true
           break
       }
@@ -920,6 +948,8 @@ export async function run(renderer: CliRenderer): Promise<void> {
     flamesEffectInstance,
     rainbowTextEffectInstance,
     crtRollingBarEffectInstance,
+    pipboyVignetteEffectInstance,
+    pipboyBarEffectInstance,
     brightnessValue,
     gainValue,
     colorMatrixEffectInstance,
