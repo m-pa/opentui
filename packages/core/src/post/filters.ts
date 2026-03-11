@@ -175,20 +175,21 @@ export function applyChromaticAberration(buffer: OptimizedBuffer, strength: numb
 
 /**
  * Converts the buffer to ASCII art based on background brightness.
+ * Uses native colorMatrix for efficient color corrections.
  */
 export function applyAsciiArt(
   buffer: OptimizedBuffer,
-  ramp: string = " .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$",
+  ramp: string = ' .\'`^"",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$',
   fgColor: { r: number; g: number; b: number } = { r: 1.0, g: 1.0, b: 1.0 },
   bgColor: { r: number; g: number; b: number } = { r: 0.0, g: 0.0, b: 0.0 },
 ): void {
   const width = buffer.width
   const height = buffer.height
   const chars = buffer.buffers.char
-  const fg = buffer.buffers.fg
   const bg = buffer.buffers.bg
   const rampLength = ramp.length
 
+  // Set ASCII characters based on background luminance
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const index = y * width + x
@@ -199,16 +200,53 @@ export function applyAsciiArt(
       const lum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB // Luminance
       const rampIndex = Math.min(rampLength - 1, Math.floor(lum * rampLength))
       chars[index] = ramp[rampIndex].charCodeAt(0)
-      // Overwrite foreground color
-      fg[colorIndex] = fgColor.r
-      fg[colorIndex + 1] = fgColor.g
-      fg[colorIndex + 2] = fgColor.b
-      // Overwrite background color
-      bg[colorIndex] = bgColor.r
-      bg[colorIndex + 1] = bgColor.g
-      bg[colorIndex + 2] = bgColor.b
     }
   }
+
+  // Create color matrix that sets all pixels to the target color
+  // Matrix: output = target_color * input (where input is 1.0 from alpha)
+  const fgMatrix = new Float32Array([
+    0,
+    0,
+    0,
+    fgColor.r, // Red output
+    0,
+    0,
+    0,
+    fgColor.g, // Green output
+    0,
+    0,
+    0,
+    fgColor.b, // Blue output
+    0,
+    0,
+    0,
+    1, // Alpha output (identity)
+  ])
+
+  const bgMatrix = new Float32Array([
+    0,
+    0,
+    0,
+    bgColor.r, // Red output
+    0,
+    0,
+    0,
+    bgColor.g, // Green output
+    0,
+    0,
+    0,
+    bgColor.b, // Blue output
+    0,
+    0,
+    0,
+    1, // Alpha output (identity)
+  ])
+
+  // Apply uniform color transformation to foreground (target = 1)
+  buffer.colorMatrixUniform(fgMatrix, 1.0, 1)
+  // Apply uniform color transformation to background (target = 2)
+  buffer.colorMatrixUniform(bgMatrix, 1.0, 2)
 }
 
 /**
