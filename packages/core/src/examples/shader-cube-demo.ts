@@ -33,6 +33,7 @@ import {
 } from "../post/effects"
 import * as Matrices from "../post/matrices"
 import type { OptimizedBuffer } from "../buffer"
+import { colorMatrixUniform } from "../zig"
 import { ThreeCliRenderer } from "../3d"
 
 // State management for the demo
@@ -178,7 +179,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
 
     public apply(buffer: OptimizedBuffer): void {
       const { matrix } = colorMatrixRegistry[this.currentIndex]
-      buffer.colorMatrixUniform(matrix, 1.0)
+      colorMatrixUniform(buffer, matrix, 1.0)
     }
 
     public nextMatrix(): void {
@@ -209,7 +210,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
       name: "Pipboy",
       func: (buf, dt) => {
         pipboyVignetteEffectInstance.apply(buf)
-        buf.colorMatrixUniform(Matrices.GREENSCALE_MATRIX, 1.0)
+        colorMatrixUniform(buf, Matrices.GREENSCALE_MATRIX, 1.0)
         pipboyBarEffectInstance.apply(buf, dt)
       },
     },

@@ -1,4 +1,5 @@
 import type { OptimizedBuffer } from "../buffer"
+import { colorMatrix, colorMatrixUniform } from "../zig"
 
 /**
  * Applies a scanline effect by darkening every nth row using native color matrix.
@@ -49,7 +50,7 @@ export function applyScanlines(buffer: OptimizedBuffer, strength: number = 0.8, 
   ])
 
   // Apply only to background buffer (target = 2)
-  buffer.colorMatrix(matrix, cellMask, 1.0, 2)
+  colorMatrix(buffer, matrix, cellMask, 1.0, 2)
 }
 
 /**
@@ -82,7 +83,7 @@ export function applyInvert(buffer: OptimizedBuffer, strength: number = 1.0): vo
     1, // Row 3: Alpha output = A
   ])
 
-  buffer.colorMatrixUniform(matrix, strength, 3)
+  colorMatrixUniform(buffer, matrix, strength, 3)
 }
 
 /**
@@ -137,7 +138,7 @@ export function applyNoise(buffer: OptimizedBuffer, strength: number = 0.1): voi
     1, // Row 3 (Alpha output - identity)
   ])
 
-  buffer.colorMatrix(matrix, cellMask, 1.0, 3)
+  colorMatrix(buffer, matrix, cellMask, 1.0, 3)
 }
 
 /**
@@ -244,9 +245,9 @@ export function applyAsciiArt(
   ])
 
   // Apply uniform color transformation to foreground (target = 1)
-  buffer.colorMatrixUniform(fgMatrix, 1.0, 1)
+  colorMatrixUniform(buffer, fgMatrix, 1.0, 1)
   // Apply uniform color transformation to background (target = 2)
-  buffer.colorMatrixUniform(bgMatrix, 1.0, 2)
+  colorMatrixUniform(buffer, bgMatrix, 1.0, 2)
 }
 
 /**
@@ -283,9 +284,9 @@ export function applyBrightness(buffer: OptimizedBuffer, brightness: number = 0.
   ])
 
   if (!cellMask || cellMask.length === 0) {
-    buffer.colorMatrixUniform(matrix, 1.0, 3)
+    colorMatrixUniform(buffer, matrix, 1.0, 3)
   } else {
-    buffer.colorMatrix(matrix, cellMask, 1.0, 3)
+    colorMatrix(buffer, matrix, cellMask, 1.0, 3)
   }
 }
 
@@ -322,10 +323,10 @@ export function applyGain(buffer: OptimizedBuffer, gain: number = 1.0, cellMask?
   ])
 
   if (!cellMask || cellMask.length === 0) {
-    buffer.colorMatrixUniform(matrix, 1.0, 3)
+    colorMatrixUniform(buffer, matrix, 1.0, 3)
   } else {
     const cellMaskCount = Math.floor(cellMask.length / 3)
-    buffer.colorMatrix(matrix, cellMask, 1.0, 3)
+    colorMatrix(buffer, matrix, cellMask, 1.0, 3)
   }
 }
 
@@ -393,9 +394,9 @@ export function applySaturation(buffer: OptimizedBuffer, cellMask?: Float32Array
 
   // If no cellMask provided, use uniform saturation (much faster)
   if (!cellMask || cellMask.length === 0) {
-    buffer.colorMatrixUniform(matrix, 1.0, 3)
+    colorMatrixUniform(buffer, matrix, 1.0, 3)
   } else {
-    buffer.colorMatrix(matrix, cellMask, 1.0, 3)
+    colorMatrix(buffer, matrix, cellMask, 1.0, 3)
   }
 }
 

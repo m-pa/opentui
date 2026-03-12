@@ -238,63 +238,6 @@ export class OptimizedBuffer {
     this.lib.bufferSetCellWithAlphaBlending(this.bufferPtr, x, y, char, fg, bg, attributes)
   }
 
-  /**
-   * Apply a 4x4 color matrix transformation to the buffer.
-   * @param matrix - 16 values representing a 4x4 RGBA matrix in row-major order (each row = output channel):
-   *   [r->r, g->r, b->r, a->r,  // Row 0: Red output coefficients
-   *    r->g, g->g, b->g, a->g,  // Row 1: Green output coefficients
-   *    r->b, g->b, b->b, a->b,  // Row 2: Blue output coefficients
-   *    r->a, g->a, b->a, a->a]  // Row 3: Alpha output coefficients (usually [0,0,0,1])
-   * @param cellMask - Array of [x, y, strength] cell masks for per-pixel application
-   * @param strength - Optional global strength multiplier (defaults to 1.0)
-   * @param target - Optional target buffer(s): 1=FG, 2=BG, 3=Both (default: 3)
-   */
-  public colorMatrix(
-    matrix: number[] | Float32Array,
-    cellMask: number[] | Float32Array,
-    strength: number = 1.0,
-    target: 1 | 2 | 3 = 3,
-  ): void {
-    this.guard()
-    const matrixArray = matrix instanceof Float32Array ? matrix : new Float32Array(matrix)
-    if (matrixArray.length !== 16) {
-      throw new Error("Color matrix must be a 4x4 RGBA matrix (16 values)")
-    }
-
-    let cellMaskArray: Float32Array
-    if (cellMask instanceof Float32Array) {
-      cellMaskArray = cellMask
-    } else {
-      if (cellMask.length === 0 || cellMask.length % 3 !== 0) {
-        throw new Error("Cell mask must be an array of [x, y, strength] values")
-      }
-      cellMaskArray = new Float32Array(cellMask)
-    }
-
-    const cellMaskCount = Math.floor(cellMaskArray.length / 3)
-    this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrixArray), ptr(cellMaskArray), cellMaskCount, strength, target)
-  }
-
-  /**
-   * Apply a 4x4 color matrix transformation uniformly to the entire buffer.
-   * @param matrix - 16 values representing a 4x4 RGBA matrix in row-major order (each row = output channel):
-   *   [r->r, g->r, b->r, a->r,  // Row 0: Red output coefficients
-   *    r->g, g->g, b->g, a->g,  // Row 1: Green output coefficients
-   *    r->b, g->b, b->b, a->b,  // Row 2: Blue output coefficients
-   *    r->a, g->a, b->a, a->a]  // Row 3: Alpha output coefficients (usually [0,0,0,1])
-   * @param strength - Optional strength multiplier (0.0 = no effect, 1.0 = full matrix, defaults to 1.0)
-   * @param target - Optional target buffer(s): 1=FG, 2=BG, 3=Both (default: 3)
-   */
-  public colorMatrixUniform(matrix: number[] | Float32Array, strength: number = 1.0, target: 1 | 2 | 3 = 3): void {
-    this.guard()
-    const matrixArray = matrix instanceof Float32Array ? matrix : new Float32Array(matrix)
-    if (matrixArray.length !== 16) {
-      throw new Error("Color matrix must be a 4x4 RGBA matrix (16 values)")
-    }
-    if (strength === 0.0) return
-    this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrixArray), strength, target)
-  }
-
   public drawText(
     text: string,
     x: number,

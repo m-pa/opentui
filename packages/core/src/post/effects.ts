@@ -1,4 +1,5 @@
 import type { OptimizedBuffer } from "../buffer"
+import { colorMatrix } from "../zig"
 
 interface ActiveGlitch {
   y: number
@@ -324,7 +325,7 @@ export class VignetteEffect {
     // colorMatrix blends: result = original + (transformed - original) × strength
     // With zero matrix: transformed = 0
     // Result = original + (0 - original) × attenuation = original × (1 - attenuation)
-    buffer.colorMatrix(VignetteEffect.zeroMatrix, this.precomputedAttenuationCellMask!, 1.0, 3)
+    colorMatrix(buffer, VignetteEffect.zeroMatrix, this.precomputedAttenuationCellMask!, 1.0, 3)
   }
 }
 
@@ -549,7 +550,7 @@ export class CloudsEffect {
     // Zero matrix: transformed = 0 (black)
     // Result = original + (0 - original) × attenuation = original × (1 - attenuation)
     const zeroMatrix = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-    buffer.colorMatrix(zeroMatrix, cellMask, 1.0, 2) // target = 2 (background only)
+    colorMatrix(buffer, zeroMatrix, cellMask, 1.0, 2) // target = 2 (background only)
   }
 }
 
