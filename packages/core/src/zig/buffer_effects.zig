@@ -84,12 +84,13 @@ pub fn colorMatrix(self: anytype, matrix: []const f32, cellMask: []const f32, gl
         const y_f = cellMask[i + 1];
         const cellStrength = cellMask[i + 2] * globalStrength;
 
-        if (!math.isFinite(x_f) or !math.isFinite(y_f) or !math.isFinite(cellStrength)) continue;
         if (x_f < 0 or y_f < 0 or x_f >= width_f or y_f >= height_f) continue;
-        if (cellStrength == 0.0) continue;
-
         const x: u32 = @intFromFloat(x_f);
         const y: u32 = @intFromFloat(y_f);
+
+        if (!math.isFinite(cellStrength)) continue;
+        if (cellStrength == 0.0) continue;
+
         const index = y * width + x;
 
         // Apply color matrix to foreground if target includes FG
