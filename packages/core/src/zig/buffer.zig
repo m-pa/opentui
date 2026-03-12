@@ -595,16 +595,6 @@ pub const OptimizedBuffer = struct {
         return self.respectAlpha;
     }
 
-    pub fn colorMatrix(self: *OptimizedBuffer, matrix: []const f32, cellMask: []const f32, strength: f32, target: u8) void {
-        const color_target: buffer_effects.ColorTarget = @enumFromInt(target);
-        buffer_effects.colorMatrix(self, matrix, cellMask, strength, color_target);
-    }
-
-    pub fn colorMatrixUniform(self: *OptimizedBuffer, matrix: []const f32, strength: f32, target: u8) void {
-        const color_target: buffer_effects.ColorTarget = @enumFromInt(target);
-        buffer_effects.colorMatrixUniform(self, matrix, strength, color_target);
-    }
-
     pub fn getId(self: *const OptimizedBuffer) []const u8 {
         return self.id;
     }

@@ -86,7 +86,7 @@ test "colorMatrixUniform - identity matrix leaves colors unchanged" {
     buf.buffer.fg[3] = white;
 
     // Apply identity matrix at full strength to foreground
-    buf.colorMatrixUniform(&IDENTITY_MATRIX, 1.0, 1); // target=1 (FG)
+    buffer_effects.colorMatrixUniform(buf, &IDENTITY_MATRIX, 1.0, ColorTarget.FG);
 
     // Colors should be unchanged
     try expectRGBAApprox(red, buf.buffer.fg[0], 0.0001);
@@ -115,7 +115,7 @@ test "colorMatrixUniform - zero strength has no effect" {
     @memset(buf.buffer.fg, red);
 
     // Apply sepia matrix with zero strength
-    buf.colorMatrixUniform(&SEPIA_MATRIX, 0.0, 1); // target=1 (FG)
+    buffer_effects.colorMatrixUniform(buf, &SEPIA_MATRIX, 0.0, ColorTarget.FG);
 
     // Colors should be unchanged
     try expectRGBAApprox(red, buf.buffer.fg[0], 0.0001);
@@ -146,7 +146,7 @@ test "colorMatrixUniform - grayscale transformation" {
     buf.buffer.fg[2] = blue;
 
     // Apply grayscale matrix at full strength to foreground
-    buf.colorMatrixUniform(&GRAYSCALE_MATRIX, 1.0, 1); // target=1 (FG)
+    buffer_effects.colorMatrixUniform(buf, &GRAYSCALE_MATRIX, 1.0, ColorTarget.FG); // target=1 (FG)
 
     // Calculate expected grayscale values
     // Luminance = 0.299*R + 0.587*G + 0.114*B
@@ -180,7 +180,7 @@ test "colorMatrixUniform - partial strength blends with original" {
     buf.buffer.fg[1] = red;
 
     // Apply sepia at 50% strength
-    buf.colorMatrixUniform(&SEPIA_MATRIX, 0.5, 1);
+    buffer_effects.colorMatrixUniform(buf, &SEPIA_MATRIX, 0.5, ColorTarget.FG);
 
     // Expected: blend(original, sepia_result, 0.5)
     // Sepia of pure red: R=0.393, G=0.349, B=0.272
@@ -219,7 +219,7 @@ test "colorMatrixUniform - target affects correct buffers" {
     buf.buffer.bg[1] = blue;
 
     // Apply to FG only (target = 1)
-    buf.colorMatrixUniform(&GRAYSCALE_MATRIX, 1.0, 1);
+    buffer_effects.colorMatrixUniform(buf, &GRAYSCALE_MATRIX, 1.0, ColorTarget.FG);
 
     // FG should be grayscale, BG should remain blue
     const gray_red = 0.299 * 1.0;
@@ -232,7 +232,7 @@ test "colorMatrixUniform - target affects correct buffers" {
     buf.buffer.fg[1] = red;
     buf.buffer.bg[1] = blue;
 
-    buf.colorMatrixUniform(&GRAYSCALE_MATRIX, 1.0, 2); // target=2 (BG)
+    buffer_effects.colorMatrixUniform(buf, &GRAYSCALE_MATRIX, 1.0, ColorTarget.BG); // target=2 (BG)
 
     // BG should be grayscale, FG should remain red
     const gray_blue = 0.114 * 1.0;
@@ -245,7 +245,7 @@ test "colorMatrixUniform - target affects correct buffers" {
     buf.buffer.fg[1] = red;
     buf.buffer.bg[1] = blue;
 
-    buf.colorMatrixUniform(&GRAYSCALE_MATRIX, 1.0, 3); // target=3 (Both)
+    buffer_effects.colorMatrixUniform(buf, &GRAYSCALE_MATRIX, 1.0, ColorTarget.Both); // target=3 (Both)
 
     // Both should be grayscale
     try expectRGBAApprox(.{ gray_red, gray_red, gray_red, 1.0 }, buf.buffer.fg[0], 0.001);
@@ -276,7 +276,7 @@ test "colorMatrixUniform - handles buffer sizes not divisible by 4" {
     }
 
     // Apply sepia at full strength
-    buf.colorMatrixUniform(&SEPIA_MATRIX, 1.0, 1);
+    buffer_effects.colorMatrixUniform(buf, &SEPIA_MATRIX, 1.0, ColorTarget.FG);
 
     // All pixels should be transformed (including the scalar fallback)
     const expected_r = 0.393;
@@ -308,7 +308,7 @@ test "colorMatrixUniform - empty matrix returns early" {
 
     // Empty matrix - should return early without changes
     const empty_matrix = [0]f32{};
-    buf.colorMatrixUniform(&empty_matrix, 1.0, 1);
+    buffer_effects.colorMatrixUniform(buf, &empty_matrix, 1.0, ColorTarget.FG);
 
     // Color should be unchanged
     try expectRGBAApprox(red, buf.buffer.fg[0], 0.0001);
@@ -338,7 +338,7 @@ test "colorMatrix - identity matrix leaves colors unchanged" {
     // Apply identity to specific cells: (0, 0) and (1, 1) with strength 1.0
     // cellMask format: [x, y, strength, x, y, strength, ...]
     const cell_mask = [_]f32{ 0.0, 0.0, 1.0, 1.0, 1.0, 1.0 };
-    buf.colorMatrix(&IDENTITY_MATRIX, &cell_mask, 1.0, 1); // target=1 (FG)
+    buffer_effects.colorMatrix(buf, &IDENTITY_MATRIX, &cell_mask, 1.0, ColorTarget.FG); // target=1 (FG)
 
     // Colors should be unchanged
     try expectRGBAApprox(red, buf.buffer.fg[0], 0.0001);
@@ -367,7 +367,7 @@ test "colorMatrix - applies transformation to specified cells only" {
 
     // Apply sepia only to cell (1, 1) with full strength
     const cell_mask = [_]f32{ 1.0, 1.0, 1.0 };
-    buf.colorMatrix(&SEPIA_MATRIX, &cell_mask, 1.0, 1);
+    buffer_effects.colorMatrix(buf, &SEPIA_MATRIX, &cell_mask, 1.0, ColorTarget.FG);
 
     // Cell (1, 1) should be transformed (index = y * width + x = 1 * 3 + 1 = 4)
     const expected_r = 0.393;
@@ -400,7 +400,7 @@ test "colorMatrix - globalStrength scales individual cell strengths" {
 
     // Apply sepia with cell strength 1.0 but globalStrength 0.5
     const cell_mask = [_]f32{ 0.0, 0.0, 1.0 };
-    buf.colorMatrix(&SEPIA_MATRIX, &cell_mask, 0.5, 1);
+    buffer_effects.colorMatrix(buf, &SEPIA_MATRIX, &cell_mask, 0.5, ColorTarget.FG);
 
     // Expected: blend(original, sepia, 0.5)
     const sepia_r = 0.393;
@@ -437,7 +437,7 @@ test "colorMatrix - respects target parameter" {
 
     // Apply to FG only (target = 1)
     const cell_mask = [_]f32{ 0.0, 0.0, 1.0 };
-    buf.colorMatrix(&GRAYSCALE_MATRIX, &cell_mask, 1.0, 1);
+    buffer_effects.colorMatrix(buf, &GRAYSCALE_MATRIX, &cell_mask, 1.0, ColorTarget.FG);
 
     // FG should be grayscale, BG should remain blue
     const gray_red = 0.299 * 1.0;
@@ -450,7 +450,7 @@ test "colorMatrix - respects target parameter" {
     buf.buffer.fg[1] = red;
     buf.buffer.bg[1] = blue;
 
-    buf.colorMatrix(&GRAYSCALE_MATRIX, &cell_mask, 1.0, 2); // target=2 (BG)
+    buffer_effects.colorMatrix(buf, &GRAYSCALE_MATRIX, &cell_mask, 1.0, ColorTarget.BG); // target=2 (BG)
 
     // BG should be grayscale, FG should remain red
     const gray_blue = 0.114 * 1.0;
@@ -478,7 +478,7 @@ test "colorMatrix - skips out-of-bounds coordinates" {
 
     // Apply to out-of-bounds and valid cell
     const cell_mask = [_]f32{ 10.0, 10.0, 1.0, 1.0, 1.0, 1.0 }; // (10, 10) is OOB
-    buf.colorMatrix(&SEPIA_MATRIX, &cell_mask, 1.0, 1);
+    buffer_effects.colorMatrix(buf, &SEPIA_MATRIX, &cell_mask, 1.0, ColorTarget.FG);
 
     // Valid cell should be transformed
     const expected_r = 0.393;
@@ -508,7 +508,7 @@ test "colorMatrix - skips NaN and Inf coordinates" {
     // Apply with NaN and valid coordinates
     const nan = std.math.nan(f32);
     const cell_mask = [_]f32{ nan, 1.0, 1.0, 1.0, 1.0, 1.0 };
-    buf.colorMatrix(&SEPIA_MATRIX, &cell_mask, 1.0, 1);
+    buffer_effects.colorMatrix(buf, &SEPIA_MATRIX, &cell_mask, 1.0, ColorTarget.FG);
 
     // Valid cell should be transformed
     const expected_r = 0.393;
@@ -537,7 +537,7 @@ test "colorMatrix - skips zero strength cells" {
 
     // Apply with zero strength
     const cell_mask = [_]f32{ 0.0, 0.0, 0.0 };
-    buf.colorMatrix(&SEPIA_MATRIX, &cell_mask, 1.0, 1);
+    buffer_effects.colorMatrix(buf, &SEPIA_MATRIX, &cell_mask, 1.0, ColorTarget.FG);
 
     // Color should be unchanged
     try expectRGBAApprox(red, buf.buffer.fg[0], 0.0001);
@@ -576,7 +576,7 @@ test "colorMatrix - handles multiple cells in mask" {
         2.0, 2.0, 0.0, // (2, 2) - none (skipped)
         3.0, 3.0, 1.0, // (3, 3) - full
     };
-    buf.colorMatrix(&SEPIA_MATRIX, &cell_mask, 1.0, 1);
+    buffer_effects.colorMatrix(buf, &SEPIA_MATRIX, &cell_mask, 1.0, ColorTarget.FG);
 
     // (0, 0) should be fully sepia
     const sepia_r = 0.393;
@@ -622,7 +622,7 @@ test "colorMatrix - truncates incomplete mask triplets" {
 
     // Mask with 5 elements (1 complete triplet + 2 incomplete)
     const cell_mask = [_]f32{ 0.0, 0.0, 1.0, 1.0, 1.0 };
-    buf.colorMatrix(&SEPIA_MATRIX, &cell_mask, 1.0, 1);
+    buffer_effects.colorMatrix(buf, &SEPIA_MATRIX, &cell_mask, 1.0, ColorTarget.FG);
 
     // Only first cell should be transformed
     const sepia_r = 0.393;
@@ -654,7 +654,7 @@ test "colorMatrix - empty mask returns early" {
 
     // Empty mask - should return early
     const empty_mask = [0]f32{};
-    buf.colorMatrix(&SEPIA_MATRIX, &empty_mask, 1.0, 1);
+    buffer_effects.colorMatrix(buf, &SEPIA_MATRIX, &empty_mask, 1.0, ColorTarget.FG);
 
     // Color should be unchanged
     try expectRGBAApprox(red, buf.buffer.fg[0], 0.0001);
@@ -681,7 +681,7 @@ test "colorMatrix - empty matrix returns early" {
     // Empty matrix - should return early
     const empty_matrix = [0]f32{};
     const cell_mask = [_]f32{ 0.0, 0.0, 1.0 };
-    buf.colorMatrix(&empty_matrix, &cell_mask, 1.0, 1);
+    buffer_effects.colorMatrix(buf, &empty_matrix, &cell_mask, 1.0, ColorTarget.FG);
 
     // Color should be unchanged
     try expectRGBAApprox(red, buf.buffer.fg[0], 0.0001);
@@ -707,7 +707,7 @@ test "colorMatrix - negative coordinates are skipped" {
 
     // Apply with negative coordinates followed by valid
     const cell_mask = [_]f32{ -1.0, -1.0, 1.0, 1.0, 1.0, 1.0 };
-    buf.colorMatrix(&SEPIA_MATRIX, &cell_mask, 1.0, 1);
+    buffer_effects.colorMatrix(buf, &SEPIA_MATRIX, &cell_mask, 1.0, ColorTarget.FG);
 
     // Valid cell should be transformed
     const expected_r = 0.393;
