@@ -3844,56 +3844,37 @@ try {
 /**
  * Apply a 4x4 color matrix transformation to the buffer.
  * @param buffer - The OptimizedBuffer to apply the matrix to
- * @param matrix - 16 values representing a 4x4 RGBA matrix in row-major order
- * @param cellMask - Array of [x, y, strength] cell masks for per-pixel application
+ * @param matrix - 16 values representing a 4x4 RGBA matrix in row-major order (must be Float32Array)
+ * @param cellMask - Array of [x, y, strength] cell masks for per-pixel application (must be Float32Array)
  * @param strength - Global strength multiplier (defaults to 1.0)
  * @param target - Target buffer(s): 1=FG, 2=BG, 3=Both (default: 3)
  */
 export function colorMatrix(
   buffer: OptimizedBuffer,
-  matrix: number[] | Float32Array,
-  cellMask: number[] | Float32Array,
+  matrix: Float32Array,
+  cellMask: Float32Array,
   strength: number = 1.0,
   target: 1 | 2 | 3 = 3,
 ): void {
   const lib = resolveRenderLib()
-  const matrixArray = matrix instanceof Float32Array ? matrix : new Float32Array(matrix)
-  if (matrixArray.length !== 16) {
-    throw new Error("Color matrix must be a 4x4 RGBA matrix (16 values)")
-  }
-
-  let cellMaskArray: Float32Array
-  if (cellMask instanceof Float32Array) {
-    cellMaskArray = cellMask
-  } else {
-    if (cellMask.length === 0 || cellMask.length % 3 !== 0) {
-      throw new Error("Cell mask must be an array of [x, y, strength] values")
-    }
-    cellMaskArray = new Float32Array(cellMask)
-  }
-
-  const cellMaskCount = Math.floor(cellMaskArray.length / 3)
-  lib.bufferColorMatrix(buffer.ptr, ptr(matrixArray), ptr(cellMaskArray), cellMaskCount, strength, target)
+  const cellMaskCount = Math.floor(cellMask.length / 3)
+  lib.bufferColorMatrix(buffer.ptr, ptr(matrix), ptr(cellMask), cellMaskCount, strength, target)
 }
 
 /**
  * Apply a 4x4 color matrix transformation uniformly to the entire buffer.
  * @param buffer - The OptimizedBuffer to apply the matrix to
- * @param matrix - 16 values representing a 4x4 RGBA matrix in row-major order
+ * @param matrix - 16 values representing a 4x4 RGBA matrix in row-major order (must be Float32Array)
  * @param strength - Strength multiplier (0.0 = no effect, 1.0 = full matrix, defaults to 1.0)
  * @param target - Target buffer(s): 1=FG, 2=BG, 3=Both (default: 3)
  */
 export function colorMatrixUniform(
   buffer: OptimizedBuffer,
-  matrix: number[] | Float32Array,
+  matrix: Float32Array,
   strength: number = 1.0,
   target: 1 | 2 | 3 = 3,
 ): void {
   const lib = resolveRenderLib()
-  const matrixArray = matrix instanceof Float32Array ? matrix : new Float32Array(matrix)
-  if (matrixArray.length !== 16) {
-    throw new Error("Color matrix must be a 4x4 RGBA matrix (16 values)")
-  }
   if (strength === 0.0) return
-  lib.bufferColorMatrixUniform(buffer.ptr, ptr(matrixArray), strength, target)
+  lib.bufferColorMatrixUniform(buffer.ptr, ptr(matrix), strength, target)
 }
