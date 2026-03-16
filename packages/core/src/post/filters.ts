@@ -4,9 +4,6 @@ import { colorMatrix, colorMatrixUniform } from "../zig"
 /**
  * Applies a scanline effect by darkening every nth row using native color matrix.
  * Only affects the background buffer to maintain text readability.
- * @param buffer - The buffer to apply the effect to
- * @param strength - Darkening factor: 1.0 = unchanged, <1.0 darkens (default: 0.8)
- * @param step - Row interval for scanlines (default: 2 = every other row)
  */
 export function applyScanlines(buffer: OptimizedBuffer, strength: number = 0.8, step: number = 2): void {
   if (strength === 1.0 || step < 1) return
@@ -56,8 +53,6 @@ export function applyScanlines(buffer: OptimizedBuffer, strength: number = 0.8, 
 /**
  * Inverts the colors in the buffer using native color matrix.
  * Uses negative matrix with alpha offset: output = 1.0 - input for each RGB channel.
- * @param buffer - The buffer to apply the effect to
- * @param strength - Optional inversion strength: 0.0 = unchanged, 1.0 = full invert (default: 1.0)
  */
 export function applyInvert(buffer: OptimizedBuffer, strength: number = 1.0): void {
   if (strength === 0.0) return
@@ -89,8 +84,6 @@ export function applyInvert(buffer: OptimizedBuffer, strength: number = 1.0): vo
 /**
  * Adds random noise to the buffer colors using colorMatrix with brightness matrix.
  * Uses per-pixel random strength values to dim/brighten each cell.
- * @param buffer - The buffer to apply the effect to
- * @param strength - Noise intensity (0.1 = ±10% variation)
  */
 export function applyNoise(buffer: OptimizedBuffer, strength: number = 0.1): void {
   const width = buffer.width
@@ -253,9 +246,6 @@ export function applyAsciiArt(
 /**
  * Adjusts the brightness of the buffer using color matrix transformation.
  * Brightness adds the brightness value to all RGB channels (additive brightness).
- * @param buffer - The buffer to apply the effect to
- * @param brightness - brightness offset: <0.0 darkens, 0.0 unchanged, >0.0 brightens
- * @param cellMask - Optional array of [x, y, strength] cell masks for selective brightness.
  *                   If not provided, applies uniform brightness to entire buffer.
  */
 export function applyBrightness(buffer: OptimizedBuffer, brightness: number = 0.0, cellMask?: Float32Array): void {
@@ -293,9 +283,6 @@ export function applyBrightness(buffer: OptimizedBuffer, brightness: number = 0.
 /**
  * Adjusts the gain of the buffer using color matrix transformation.
  * Gain multiplies all RGB channels by the gain factor (no clamping).
- * @param buffer - The buffer to apply the effect to
- * @param gain - gain factor: <1.0 reduces, 1.0 unchanged, >1.0 amplifies
- * @param cellMask - Optional array of [x, y, strength] cell masks for selective gain.
  *                   If not provided, applies uniform gain to entire buffer.
  */
 export function applyGain(buffer: OptimizedBuffer, gain: number = 1.0, cellMask?: Float32Array): void {
@@ -332,8 +319,6 @@ export function applyGain(buffer: OptimizedBuffer, gain: number = 1.0, cellMask?
 
 /**
  * Generates a saturation color matrix (4x4 RGBA with alpha identity).
- * @param saturation - 0.0 = grayscale, 1.0 = unchanged
- * @returns 4x4 color matrix as Float32Array (16 values)
  */
 function createSaturationMatrix(saturation: number): Float32Array {
   const s = Math.max(0, saturation)
@@ -379,10 +364,6 @@ function createSaturationMatrix(saturation: number): Float32Array {
 
 /**
  * Applies a saturation adjustment to the buffer.
- * @param buffer - The buffer to apply the effect to
- * @param cellMask - Optional array of [x, y, strength] cell masks for selective saturation.
- *                   If not provided, applies uniform saturation to entire buffer.
- * @param strength - Saturation factor: 0.0 = grayscale, 1.0 = unchanged, >1.0 = oversaturated
  */
 export function applySaturation(buffer: OptimizedBuffer, cellMask?: Float32Array, strength: number = 1.0): void {
   // No need to process if saturation is 1 (no change) or strength is 0
