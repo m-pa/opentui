@@ -69,8 +69,6 @@ pub fn colorMatrix(self: anytype, matrix: []const f32, cellMask: []const f32, gl
 
     const width = self.width;
     const height = self.height;
-    const width_f: f32 = @floatFromInt(width);
-    const height_f: f32 = @floatFromInt(height);
     const fg = self.buffer.fg;
     const bg = self.buffer.bg;
 
@@ -82,11 +80,11 @@ pub fn colorMatrix(self: anytype, matrix: []const f32, cellMask: []const f32, gl
     while (i < len) : (i += 3) {
         const x_f = cellMask[i];
         const y_f = cellMask[i + 1];
-        const cellStrength = cellMask[i + 2] * globalStrength;
-
-        if (x_f < 0 or y_f < 0 or x_f >= width_f or y_f >= height_f) continue;
         const x: u32 = @intFromFloat(x_f);
         const y: u32 = @intFromFloat(y_f);
+        const cellStrength = cellMask[i + 2] * globalStrength;
+
+        if (x < 0 or y < 0 or x >= width or y >= height) continue;
 
         if (!math.isFinite(cellStrength)) continue;
         if (cellStrength == 0.0) continue;
