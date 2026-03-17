@@ -80,11 +80,16 @@ pub fn colorMatrix(self: anytype, matrix: []const f32, cellMask: []const f32, gl
     while (i < len) : (i += 3) {
         const x_f = cellMask[i];
         const y_f = cellMask[i + 1];
+
+        // Skip if coordinates are negative or non-finite before conversion
+        if (x_f < 0.0 or y_f < 0.0) continue;
+        if (!math.isFinite(x_f) or !math.isFinite(y_f)) continue;
+
         const x: u32 = @intFromFloat(x_f);
         const y: u32 = @intFromFloat(y_f);
         const cellStrength = cellMask[i + 2] * globalStrength;
 
-        if (x < 0 or y < 0 or x >= width or y >= height) continue;
+        if (x >= width or y >= height) continue;
 
         if (!math.isFinite(cellStrength)) continue;
         if (cellStrength == 0.0) continue;
