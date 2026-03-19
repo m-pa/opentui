@@ -261,6 +261,14 @@ function getOpenTUILib(libPath?: string) {
       args: ["ptr", "u32", "u32", "u32", "u32", "ptr"],
       returns: "void",
     },
+    bufferColorMatrix: {
+      args: ["ptr", "ptr", "ptr", "usize", "f32", "u8"],
+      returns: "void",
+    },
+    bufferColorMatrixUniform: {
+      args: ["ptr", "ptr", "f32", "u8"],
+      returns: "void",
+    },
     bufferResize: {
       args: ["ptr", "u32", "u32"],
       returns: "void",
@@ -1439,6 +1447,15 @@ export interface RenderLib {
     attributes?: number,
   ) => void
   bufferFillRect: (buffer: Pointer, x: number, y: number, width: number, height: number, color: RGBA) => void
+  bufferColorMatrix: (
+    buffer: Pointer,
+    matrixPtr: Pointer,
+    cellMaskPtr: Pointer,
+    cellMaskCount: number,
+    strength: number,
+    target: number,
+  ) => void
+  bufferColorMatrixUniform: (buffer: Pointer, matrixPtr: Pointer, strength: number, target: number) => void
   bufferDrawSuperSampleBuffer: (
     buffer: Pointer,
     x: number,
@@ -2167,6 +2184,21 @@ class FFIRenderLib implements RenderLib {
   public bufferFillRect(buffer: Pointer, x: number, y: number, width: number, height: number, color: RGBA) {
     const bg = color.buffer
     this.opentui.symbols.bufferFillRect(buffer, x, y, width, height, bg)
+  }
+
+  public bufferColorMatrix(
+    buffer: Pointer,
+    matrixPtr: Pointer,
+    cellMaskPtr: Pointer,
+    cellMaskCount: number,
+    strength: number,
+    target: number,
+  ): void {
+    this.opentui.symbols.bufferColorMatrix(buffer, matrixPtr, cellMaskPtr, cellMaskCount, strength, target)
+  }
+
+  public bufferColorMatrixUniform(buffer: Pointer, matrixPtr: Pointer, strength: number, target: number): void {
+    this.opentui.symbols.bufferColorMatrixUniform(buffer, matrixPtr, strength, target)
   }
 
   public bufferDrawSuperSampleBuffer(
@@ -3841,3 +3873,44 @@ export function resolveRenderLib(): RenderLib {
 try {
   opentuiLib = new FFIRenderLib(opentuiLibPath)
 } catch (error) {}
+
+// Standalone FFI functions for color matrix operations
+// These are exported directly from the FFI layer for use without Buffer class wrapper
+
+/**
+ * Apply a 4x4 color matrix transformation to the buffer.
+ * @param buffer - The OptimizedBuffer to apply the matrix to
+ * @param matrix - 16 values representing a 4x4 RGBA matrix in row-major order (must be Float32Array)
+ * @param cellMask - Array of [x, y, strength] cell masks for per-pixel application (must be Float32Array)
+ * @param strength - Global strength multiplier (defaults to 1.0)
+ * @param target - Target buffer(s): 1=FG, 2=BG, 3=Both (default: 3)
+ */
+export function colorMatrix(
+  buffer: OptimizedBuffer,
+  matrix: Float32Array,
+  cellMask: Float32Array,
+  strength: number = 1.0,
+  target: 1 | 2 | 3 = 3,
+): void {
+  const lib = resolveRenderLib()
+  const cellMaskCount = Math.floor(cellMask.length / 3)
+  lib.bufferColorMatrix(buffer.ptr, ptr(matrix), ptr(cellMask), cellMaskCount, strength, target)
+}
+
+/**
+ * Apply a 4x4 color matrix transformation uniformly to the entire buffer.
+ * @param buffer - The OptimizedBuffer to apply the matrix to
+ * @param matrix - 16 values representing a 4x4 RGBA matrix in row-major order (must be Float32Array)
+ * @param strength - Strength multiplier (0.0 = no effect, 1.0 = full matrix, defaults to 1.0)
+ * @param target - Target buffer(s): 1=FG, 2=BG, 3=Both (default: 3)
+ */
+export function colorMatrixUniform(
+  buffer: OptimizedBuffer,
+  matrix: Float32Array,
+  strength: number = 1.0,
+  target: 1 | 2 | 3 = 3,
+): void {
+  const lib = resolveRenderLib()
+  if (strength === 0.0) return
+  lib.bufferColorMatrixUniform(buffer.ptr, ptr(matrix), strength, target)
+}
