@@ -4,6 +4,7 @@ import { EventEmitter } from "events"
 import {
   type CursorStyle,
   type CursorStyleOptions,
+  type TargetChannel,
   type DebugOverlayCorner,
   type WidthMethod,
   type Highlight,
@@ -1453,9 +1454,9 @@ export interface RenderLib {
     cellMaskPtr: Pointer,
     cellMaskCount: number,
     strength: number,
-    target: number,
+    target: TargetChannel,
   ) => void
-  bufferColorMatrixUniform: (buffer: Pointer, matrixPtr: Pointer, strength: number, target: number) => void
+  bufferColorMatrixUniform: (buffer: Pointer, matrixPtr: Pointer, strength: number, target: TargetChannel) => void
   bufferDrawSuperSampleBuffer: (
     buffer: Pointer,
     x: number,
@@ -2192,12 +2193,12 @@ class FFIRenderLib implements RenderLib {
     cellMaskPtr: Pointer,
     cellMaskCount: number,
     strength: number,
-    target: number,
+    target: TargetChannel,
   ): void {
     this.opentui.symbols.bufferColorMatrix(buffer, matrixPtr, cellMaskPtr, cellMaskCount, strength, target)
   }
 
-  public bufferColorMatrixUniform(buffer: Pointer, matrixPtr: Pointer, strength: number, target: number): void {
+  public bufferColorMatrixUniform(buffer: Pointer, matrixPtr: Pointer, strength: number, target: TargetChannel): void {
     this.opentui.symbols.bufferColorMatrixUniform(buffer, matrixPtr, strength, target)
   }
 

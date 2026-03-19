@@ -2,7 +2,7 @@ import { RGBA } from "./lib"
 import { resolveRenderLib, type RenderLib } from "./zig"
 import { type Pointer, toArrayBuffer, ptr } from "bun:ffi"
 import { type BorderStyle, type BorderSides, BorderCharArrays, parseBorderStyle } from "./lib/index.js"
-import { type WidthMethod, type CapturedSpan, type CapturedLine } from "./types.js"
+import { TargetChannel, type WidthMethod, type CapturedSpan, type CapturedLine } from "./types.js"
 import type { TextBufferView } from "./text-buffer-view.js"
 import type { EditorView } from "./editor-view.js"
 
@@ -291,14 +291,18 @@ export class OptimizedBuffer {
     matrix: Float32Array,
     cellMask: Float32Array,
     strength: number = 1.0,
-    target: 1 | 2 | 3 = 3,
+    target: TargetChannel = TargetChannel.Both,
   ): void {
     this.guard()
     const cellMaskCount = Math.floor(cellMask.length / 3)
     this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(cellMask), cellMaskCount, strength, target)
   }
 
-  public colorMatrixUniform(matrix: Float32Array, strength: number = 1.0, target: 1 | 2 | 3 = 3): void {
+  public colorMatrixUniform(
+    matrix: Float32Array,
+    strength: number = 1.0,
+    target: TargetChannel = TargetChannel.Both,
+  ): void {
     this.guard()
     if (strength === 0.0) return
     this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrix), strength, target)

@@ -543,14 +543,14 @@ export fn bufferColorMatrix(bufferPtr: *buffer.OptimizedBuffer, matrixPtr: [*]co
     const matrix = matrixPtr[0..16];
     const len = cellMaskCount * 3;
     const cellMask = cellMaskPtr[0..len];
-    const color_target: buffer_effects.ColorTarget = @enumFromInt(target);
-    buffer_effects.colorMatrix(bufferPtr, matrix, cellMask, strength, color_target);
+    const targetEnum: buffer_effects.ColorTarget = @enumFromInt(target);
+    buffer_effects.colorMatrix(bufferPtr, matrix, cellMask, strength, targetEnum);
 }
 
 export fn bufferColorMatrixUniform(bufferPtr: *buffer.OptimizedBuffer, matrixPtr: [*]const f32, strength: f32, target: u8) void {
     const matrix = matrixPtr[0..16];
-    const color_target: buffer_effects.ColorTarget = @enumFromInt(target);
-    buffer_effects.colorMatrixUniform(bufferPtr, matrix, strength, color_target);
+    const targetEnum: buffer_effects.ColorTarget = @enumFromInt(target);
+    buffer_effects.colorMatrixUniform(bufferPtr, matrix, strength, targetEnum);
 }
 
 export fn bufferDrawPackedBuffer(bufferPtr: *buffer.OptimizedBuffer, data: [*]const u8, dataLen: usize, posX: u32, posY: u32, terminalWidthCells: u32, terminalHeightCells: u32) void {
