@@ -159,8 +159,6 @@ export fn createNativeSpanFeed(options_ptr: ?*const native_span_feed.Options) ?*
     return native_span_feed.createNativeSpanFeedWithAllocator(globalAllocator, options_ptr);
 }
 
-
-
 export fn getArenaAllocatedBytes() usize {
     return arena.queryCapacity();
 }

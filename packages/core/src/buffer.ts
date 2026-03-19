@@ -287,6 +287,23 @@ export class OptimizedBuffer {
     this.lib.bufferFillRect(this.bufferPtr, x, y, width, height, bg)
   }
 
+  public colorMatrix(
+    matrix: Float32Array,
+    cellMask: Float32Array,
+    strength: number = 1.0,
+    target: 1 | 2 | 3 = 3,
+  ): void {
+    this.guard()
+    const cellMaskCount = Math.floor(cellMask.length / 3)
+    this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(cellMask), cellMaskCount, strength, target)
+  }
+
+  public colorMatrixUniform(matrix: Float32Array, strength: number = 1.0, target: 1 | 2 | 3 = 3): void {
+    this.guard()
+    if (strength === 0.0) return
+    this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrix), strength, target)
+  }
+
   public drawFrameBuffer(
     destX: number,
     destY: number,

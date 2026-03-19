@@ -3873,35 +3873,3 @@ export function resolveRenderLib(): RenderLib {
 try {
   opentuiLib = new FFIRenderLib(opentuiLibPath)
 } catch (error) {}
-
-// Standalone FFI functions for color matrix operations
-// These are exported directly from the FFI layer for use without Buffer class wrapper
-
-/**
- * Apply a 4x4 color matrix transformation to the buffer.
- */
-export function colorMatrix(
-  buffer: OptimizedBuffer,
-  matrix: Float32Array,
-  cellMask: Float32Array,
-  strength: number = 1.0,
-  target: 1 | 2 | 3 = 3,
-): void {
-  const lib = resolveRenderLib()
-  const cellMaskCount = Math.floor(cellMask.length / 3)
-  lib.bufferColorMatrix(buffer.ptr, ptr(matrix), ptr(cellMask), cellMaskCount, strength, target)
-}
-
-/**
- * Apply a 4x4 color matrix transformation uniformly to the entire buffer.
- */
-export function colorMatrixUniform(
-  buffer: OptimizedBuffer,
-  matrix: Float32Array,
-  strength: number = 1.0,
-  target: 1 | 2 | 3 = 3,
-): void {
-  const lib = resolveRenderLib()
-  if (strength === 0.0) return
-  lib.bufferColorMatrixUniform(buffer.ptr, ptr(matrix), strength, target)
-}

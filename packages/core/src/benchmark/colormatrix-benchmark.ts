@@ -2,7 +2,6 @@
 
 import { performance } from "node:perf_hooks"
 import { OptimizedBuffer } from "../buffer"
-import { colorMatrix, colorMatrixUniform } from "../zig"
 
 const sepiaMatrix = new Float32Array([
   0.393, 0.769, 0.189, 0, 0.349, 0.686, 0.168, 0, 0.272, 0.534, 0.131, 0, 0, 0, 0, 1,
@@ -77,13 +76,13 @@ function runMaskBenchmark(name: string, width: number, height: number, cellMask:
   fillBufferColors(buffer)
 
   for (let i = 0; i < WARMUP_ITERATIONS; i++) {
-    colorMatrix(buffer, sepiaMatrix, cellMask, 1.0, 3)
+    buffer.colorMatrix(sepiaMatrix, cellMask, 1.0, 3)
   }
 
   const samples = new Array<number>(ITERATIONS)
   for (let i = 0; i < ITERATIONS; i++) {
     const start = performance.now()
-    colorMatrix(buffer, sepiaMatrix, cellMask, 1.0, 3)
+    buffer.colorMatrix(sepiaMatrix, cellMask, 1.0, 3)
     samples[i] = performance.now() - start
   }
 
@@ -113,13 +112,13 @@ function runUniformBenchmark(width: number, height: number): BenchmarkResult {
   fillBufferColors(buffer)
 
   for (let i = 0; i < WARMUP_ITERATIONS; i++) {
-    colorMatrixUniform(buffer, sepiaMatrix, 1.0, 3)
+    buffer.colorMatrixUniform(sepiaMatrix, 1.0, 3)
   }
 
   const samples = new Array<number>(ITERATIONS)
   for (let i = 0; i < ITERATIONS; i++) {
     const start = performance.now()
-    colorMatrixUniform(buffer, sepiaMatrix, 1.0, 3)
+    buffer.colorMatrixUniform(sepiaMatrix, 1.0, 3)
     samples[i] = performance.now() - start
   }
 

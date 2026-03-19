@@ -34,7 +34,6 @@ import {
   CRTRollingBarEffect,
 } from "../post/effects.js"
 import * as Matrices from "../post/matrices.js"
-import { colorMatrixUniform } from "../zig.js"
 
 // State management for the demo
 interface ShaderCubeDemoState {
@@ -179,7 +178,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
 
     public apply(buffer: OptimizedBuffer): void {
       const { matrix } = colorMatrixRegistry[this.currentIndex]
-      colorMatrixUniform(buffer, matrix, 1.0)
+      buffer.colorMatrixUniform(matrix, 1.0)
     }
 
     public nextMatrix(): void {
@@ -210,7 +209,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
       name: "Pipboy",
       func: (buf, dt) => {
         pipboyVignetteEffectInstance.apply(buf)
-        colorMatrixUniform(buf, Matrices.GREENSCALE_MATRIX, 1.0)
+        buf.colorMatrixUniform(Matrices.GREENSCALE_MATRIX, 1.0)
         pipboyBarEffectInstance.apply(buf, dt)
       },
     },
