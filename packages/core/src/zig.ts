@@ -3879,11 +3879,6 @@ try {
 
 /**
  * Apply a 4x4 color matrix transformation to the buffer.
- * @param buffer - The OptimizedBuffer to apply the matrix to
- * @param matrix - 16 values representing a 4x4 RGBA matrix in row-major order (must be Float32Array)
- * @param cellMask - Array of [x, y, strength] cell masks for per-pixel application (must be Float32Array)
- * @param strength - Global strength multiplier (defaults to 1.0)
- * @param target - Target buffer(s): 1=FG, 2=BG, 3=Both (default: 3)
  */
 export function colorMatrix(
   buffer: OptimizedBuffer,
@@ -3899,10 +3894,6 @@ export function colorMatrix(
 
 /**
  * Apply a 4x4 color matrix transformation uniformly to the entire buffer.
- * @param buffer - The OptimizedBuffer to apply the matrix to
- * @param matrix - 16 values representing a 4x4 RGBA matrix in row-major order (must be Float32Array)
- * @param strength - Strength multiplier (0.0 = no effect, 1.0 = full matrix, defaults to 1.0)
- * @param target - Target buffer(s): 1=FG, 2=BG, 3=Both (default: 3)
  */
 export function colorMatrixUniform(
   buffer: OptimizedBuffer,
