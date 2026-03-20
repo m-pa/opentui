@@ -10,7 +10,6 @@ const assert = std.debug.assert;
 
 const gp = @import("grapheme.zig");
 const link = @import("link.zig");
-const buffer_effects = @import("buffer-methods.zig");
 
 const logger = @import("logger.zig");
 const utf8 = @import("utf8.zig");
