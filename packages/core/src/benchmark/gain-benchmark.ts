@@ -2,13 +2,14 @@
 
 import { performance } from "node:perf_hooks"
 import { OptimizedBuffer } from "../buffer"
+import { applyGain } from "../post/filters"
 
-type Scenario = { width: number; height: number; mode: "tuples" | "packed" }
+type Scenario = { width: number; height: number }
 type ScenarioResult = {
   size: string
   cells: number
-  mode: "tuples" | "packed"
   avgMs: number
+  avgNsPerCell: number
   medianMs: number
   p95Ms: number
 }
@@ -22,48 +23,7 @@ const baseScenarios: Array<{ width: number; height: number }> = [
   { width: 120, height: 40 },
   { width: 200, height: 60 },
 ]
-const scenarios: Scenario[] = baseScenarios.flatMap((scenario) => [
-  { ...scenario, mode: "tuples" },
-  { ...scenario, mode: "packed" },
-])
-
-function buildCells(width: number, height: number): Array<[number, number, number]> {
-  const cells = new Array<[number, number, number]>(width * height)
-  const maxX = Math.max(1, width - 1)
-  const maxY = Math.max(1, height - 1)
-  let i = 0
-
-  for (let y = 0; y < height; y++) {
-    const yFactor = y / maxY
-    for (let x = 0; x < width; x++) {
-      const xFactor = x / maxX
-      const baseGain = 0.5 + 0.5 * (xFactor * yFactor)
-      cells[i++] = [x, y, baseGain * GAIN_FACTOR]
-    }
-  }
-
-  return cells
-}
-
-function buildTriplets(width: number, height: number): Float32Array {
-  const triplets = new Float32Array(width * height * 3)
-  const maxX = Math.max(1, width - 1)
-  const maxY = Math.max(1, height - 1)
-  let i = 0
-
-  for (let y = 0; y < height; y++) {
-    const yFactor = y / maxY
-    for (let x = 0; x < width; x++) {
-      const xFactor = x / maxX
-      const baseGain = 0.5 + 0.5 * (xFactor * yFactor)
-      triplets[i++] = x
-      triplets[i++] = y
-      triplets[i++] = baseGain * GAIN_FACTOR
-    }
-  }
-
-  return triplets
-}
+const scenarios: Scenario[] = baseScenarios
 
 function calculateStats(samples: number[]): { avgMs: number; medianMs: number; p95Ms: number } {
   const sorted = [...samples].sort((a, b) => a - b)
@@ -81,21 +41,24 @@ function formatMs(value: number): number {
   return Number(value.toFixed(4))
 }
 
-function runScenario({ width, height, mode }: Scenario): ScenarioResult {
+function formatNs(value: number): number {
+  return Number(value.toFixed(2))
+}
+
+function runScenario({ width, height }: Scenario): ScenarioResult {
   const buffer = OptimizedBuffer.create(width, height, "unicode", { id: `gain-bench-${width}x${height}` })
-  const cells = mode === "tuples" ? buildCells(width, height) : buildTriplets(width, height)
   const { fg, bg } = buffer.buffers
   fg.fill(1)
   bg.fill(1)
 
   for (let i = 0; i < WARMUP_ITERATIONS; i++) {
-    buffer.gain(cells)
+    applyGain(buffer, GAIN_FACTOR)
   }
 
   const samples = new Array<number>(ITERATIONS)
   for (let i = 0; i < ITERATIONS; i++) {
     const start = performance.now()
-    buffer.gain(cells)
+    applyGain(buffer, GAIN_FACTOR)
     samples[i] = performance.now() - start
   }
 
@@ -105,8 +68,8 @@ function runScenario({ width, height, mode }: Scenario): ScenarioResult {
   return {
     size: `${width}x${height}`,
     cells: width * height,
-    mode,
     avgMs: formatMs(stats.avgMs),
+    avgNsPerCell: formatNs((stats.avgMs * 1_000_000) / (width * height)),
     medianMs: formatMs(stats.medianMs),
     p95Ms: formatMs(stats.p95Ms),
   }
