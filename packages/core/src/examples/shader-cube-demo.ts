@@ -91,7 +91,9 @@ export async function run(renderer: CliRenderer): Promise<void> {
   renderer.start()
   const WIDTH = renderer.terminalWidth
   const HEIGHT = renderer.terminalHeight
-  const CAM_DISTANCE = 2
+  const CAM_DISTANCE = 3.5
+  const CAMERA_PAN_STEP = 0.2
+  const CAMERA_ZOOM_STEP = 0.35
   const rotationSpeed = [0.2, 0.4, 0.1]
 
   const lightColors = [
@@ -562,14 +564,14 @@ export async function run(renderer: CliRenderer): Promise<void> {
   const keyHandler = (key: KeyEvent) => {
     const cubeObject = sceneRoot.getObjectByName("cube") as ThreeMesh | undefined
 
-    if (key.name === "w") cameraNode.translateY(0.5)
-    else if (key.name === "s") cameraNode.translateY(-0.5)
-    else if (key.name === "a") cameraNode.translateX(-0.5)
-    else if (key.name === "d") cameraNode.translateX(0.5)
+    if (key.name === "w") cameraNode.translateY(CAMERA_PAN_STEP)
+    else if (key.name === "s") cameraNode.translateY(-CAMERA_PAN_STEP)
+    else if (key.name === "a") cameraNode.translateX(-CAMERA_PAN_STEP)
+    else if (key.name === "d") cameraNode.translateX(CAMERA_PAN_STEP)
     if (key.name === "q") cameraNode.rotateY(0.1)
     else if (key.name === "e") cameraNode.rotateY(-0.1)
-    if (key.name === "z") cameraNode.translateZ(1)
-    else if (key.name === "x") cameraNode.translateZ(-1)
+    if (key.name === "z") cameraNode.translateZ(CAMERA_ZOOM_STEP)
+    else if (key.name === "x") cameraNode.translateZ(-CAMERA_ZOOM_STEP)
     if (key.name === "r") {
       cameraNode.position.set(0, 0, CAM_DISTANCE)
       cameraNode.rotation.set(0, 0, 0)
@@ -688,6 +690,8 @@ export async function run(renderer: CliRenderer): Promise<void> {
       updateParameterUI()
     }
 
+    let paramChanged = false
+
     if (key.name === "t" && filterFunctions[currentFilterIndex].name === "Saturation") {
       saturationFullScreen = !saturationFullScreen
       if (saturationFullScreen) {
@@ -701,7 +705,6 @@ export async function run(renderer: CliRenderer): Promise<void> {
     }
 
     // Parameter Adjustment Keys ([ / ] and { / })
-    let paramChanged = false
     const currentFilterName = filterFunctions[currentFilterIndex].name
     const height = renderer.terminalHeight
 
