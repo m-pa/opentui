@@ -608,6 +608,36 @@ test "colorMatrix - negative coordinates are skipped" {
     try expectRGBAApprox(.{ expected_r, expected_g, expected_b, 1.0 }, buf.buffer.fg[4], 0.001);
 }
 
+test "colorMatrix - finite coordinates larger than u32 max are skipped" {
+    const pool = gp.initGlobalPool(std.testing.allocator);
+    defer gp.deinitGlobalPool();
+
+    var buf = try OptimizedBuffer.init(
+        std.testing.allocator,
+        3,
+        3,
+        .{ .pool = pool, .id = "test-buffer" },
+    );
+    defer buf.deinit();
+
+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
+    const red = RGBA{ 1.0, 0.0, 0.0, 1.0 };
+
+    try buf.clear(bg, null);
+    buf.buffer.fg[4] = red; // (1, 1)
+
+    // First triplet uses finite but out-of-range coordinates for u32 conversion.
+    // Second triplet is valid and should still be processed.
+    const huge = std.math.floatMax(f32);
+    const cell_mask = [_]f32{ huge, huge, 1.0, 1.0, 1.0, 1.0 };
+    buffer_effects.colorMatrix(buf, &SEPIA_MATRIX, &cell_mask, 1.0, ColorTarget.FG);
+
+    const expected_r = 0.393;
+    const expected_g = 0.349;
+    const expected_b = 0.272;
+    try expectRGBAApprox(.{ expected_r, expected_g, expected_b, 1.0 }, buf.buffer.fg[4], 0.001);
+}
+
 // ==================== colorMatrixUniform Tests ====================
 
 test "colorMatrixUniform - identity matrix leaves colors unchanged" {
