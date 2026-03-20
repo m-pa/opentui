@@ -18,7 +18,7 @@ const logger = @import("logger.zig");
 const event_bus = @import("event-bus.zig");
 const utils = @import("utils.zig");
 const native_span_feed = @import("native-span-feed.zig");
-const buffer_effects = @import("buffer_effects.zig");
+const buffer_effects = @import("buffer-methods.zig");
 
 pub const OptimizedBuffer = buffer.OptimizedBuffer;
 pub const CliRenderer = renderer.CliRenderer;

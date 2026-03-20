@@ -1,6 +1,6 @@
 const std = @import("std");
 const buffer_mod = @import("../buffer.zig");
-const buffer_effects = @import("../buffer_effects.zig");
+const buffer_effects = @import("../buffer-methods.zig");
 const gp = @import("../grapheme.zig");
 
 const OptimizedBuffer = buffer_mod.OptimizedBuffer;
