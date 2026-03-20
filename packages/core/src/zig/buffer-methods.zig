@@ -74,6 +74,7 @@ pub fn colorMatrix(self: anytype, matrix: []const f32, cellMask: []const f32, gl
 
     // Use matrix directly as 4x4
     const mat4 = matrix[0..16].*;
+    const max_u32_f = @as(f32, @floatFromInt(std.math.maxInt(u32)));
 
     const len = cellMask.len - (cellMask.len % 3);
     var i: usize = 0;
@@ -84,6 +85,7 @@ pub fn colorMatrix(self: anytype, matrix: []const f32, cellMask: []const f32, gl
         // Skip if coordinates are negative or non-finite before conversion
         if (x_f < 0.0 or y_f < 0.0) continue;
         if (!math.isFinite(x_f) or !math.isFinite(y_f)) continue;
+        if (x_f > max_u32_f or y_f > max_u32_f) continue;
 
         const x: u32 = @intFromFloat(x_f);
         const y: u32 = @intFromFloat(y_f);
