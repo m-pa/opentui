@@ -545,6 +545,32 @@ test "colorMatrix - infinity strength is skipped" {
     try expectRGBAApprox(red, buf.buffer.fg[0], 0.0001);
 }
 
+test "colorMatrix - non-finite global strength is skipped" {
+    const pool = gp.initGlobalPool(std.testing.allocator);
+    defer gp.deinitGlobalPool();
+
+    var buf = try OptimizedBuffer.init(
+        std.testing.allocator,
+        2,
+        1,
+        .{ .pool = pool, .id = "test-buffer" },
+    );
+    defer buf.deinit();
+
+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
+    const red = RGBA{ 1.0, 0.0, 0.0, 1.0 };
+
+    try buf.clear(bg, null);
+    buf.buffer.fg[0] = red;
+
+    const inf = std.math.inf(f32);
+    const cell_mask = [_]f32{ 0.0, 0.0, 1.0 };
+    buffer_effects.colorMatrix(buf, &SEPIA_MATRIX, &cell_mask, inf, ColorTarget.FG);
+
+    // Color should be unchanged
+    try expectRGBAApprox(red, buf.buffer.fg[0], 0.0001);
+}
+
 test "colorMatrix - large buffer with SIMD and scalar mix" {
     const pool = gp.initGlobalPool(std.testing.allocator);
     defer gp.deinitGlobalPool();
@@ -701,6 +727,32 @@ test "colorMatrixUniform - zero strength has no effect" {
     // Colors should be unchanged
     try expectRGBAApprox(red, buf.buffer.fg[0], 0.0001);
     try expectRGBAApprox(red, buf.buffer.fg[3], 0.0001);
+}
+
+test "colorMatrixUniform - non-finite strength has no effect" {
+    const pool = gp.initGlobalPool(std.testing.allocator);
+    defer gp.deinitGlobalPool();
+
+    var buf = try OptimizedBuffer.init(
+        std.testing.allocator,
+        2,
+        1,
+        .{ .pool = pool, .id = "test-buffer" },
+    );
+    defer buf.deinit();
+
+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
+    const red = RGBA{ 1.0, 0.0, 0.0, 1.0 };
+
+    try buf.clear(bg, null);
+    buf.buffer.fg[0] = red;
+    buf.buffer.fg[1] = red;
+
+    const nan = std.math.nan(f32);
+    buffer_effects.colorMatrixUniform(buf, &SEPIA_MATRIX, nan, ColorTarget.FG);
+
+    try expectRGBAApprox(red, buf.buffer.fg[0], 0.0001);
+    try expectRGBAApprox(red, buf.buffer.fg[1], 0.0001);
 }
 
 test "colorMatrixUniform - grayscale transformation" {

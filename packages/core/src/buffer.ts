@@ -294,6 +294,7 @@ export class OptimizedBuffer {
     target: TargetChannel = TargetChannel.Both,
   ): void {
     this.guard()
+    if (matrix.length !== 16) throw new RangeError(`colorMatrix matrix must have length 16, got ${matrix.length}`)
     const cellMaskCount = Math.floor(cellMask.length / 3)
     this.lib.bufferColorMatrix(this.bufferPtr, ptr(matrix), ptr(cellMask), cellMaskCount, strength, target)
   }
@@ -304,6 +305,8 @@ export class OptimizedBuffer {
     target: TargetChannel = TargetChannel.Both,
   ): void {
     this.guard()
+    if (matrix.length !== 16)
+      throw new RangeError(`colorMatrixUniform matrix must have length 16, got ${matrix.length}`)
     if (strength === 0.0) return
     this.lib.bufferColorMatrixUniform(this.bufferPtr, ptr(matrix), strength, target)
   }

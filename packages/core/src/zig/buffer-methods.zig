@@ -60,12 +60,13 @@ fn applyMatrix4x4Scalar(matrix: *const [16]f32, r: f32, g: f32, b: f32, a: f32, 
 ///   Row 2: [r->b, g->b, b->b, a->b] - coefficients for Blue output
 ///   Row 3: [r->a, g->a, b->a, a->a] - coefficients for Alpha output (usually identity)
 /// cellMask format: [x, y, strength, x, y, strength, ...]
-/// globalStrength: global multiplier applied to each cell's strength value (1.0 = no change)
+/// strength: global multiplier applied to each cell's strength value (1.0 = no change)
 /// target: which buffer(s) to apply the matrix to (FG=1, BG=2, Both=3)
 /// No clamping is performed - output values may exceed [0, 1] range
-pub fn colorMatrix(self: anytype, matrix: []const f32, cellMask: []const f32, globalStrength: f32, target: ColorTarget) void {
+pub fn colorMatrix(self: anytype, matrix: []const f32, cellMask: []const f32, strength: f32, target: ColorTarget) void {
     if (matrix.len < 16 or cellMask.len < 3) return;
     if (@intFromEnum(target) == 0) return;
+    if (!math.isFinite(strength)) return;
 
     const width = self.width;
     const height = self.height;
@@ -89,7 +90,7 @@ pub fn colorMatrix(self: anytype, matrix: []const f32, cellMask: []const f32, gl
 
         const x: u32 = @intFromFloat(x_f);
         const y: u32 = @intFromFloat(y_f);
-        const cellStrength = cellMask[i + 2] * globalStrength;
+        const cellStrength = cellMask[i + 2] * strength;
 
         if (x >= width or y >= height) continue;
 
@@ -131,6 +132,7 @@ pub fn colorMatrix(self: anytype, matrix: []const f32, cellMask: []const f32, gl
 pub fn colorMatrixUniform(self: anytype, matrix: []const f32, strength: f32, target: ColorTarget) void {
     if (matrix.len < 16 or strength == 0.0) return;
     if (@intFromEnum(target) == 0) return;
+    if (!math.isFinite(strength)) return;
 
     const width = self.width;
     const height = self.height;
