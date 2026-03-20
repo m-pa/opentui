@@ -3,12 +3,33 @@
 import { performance } from "node:perf_hooks"
 import { OptimizedBuffer } from "../buffer"
 
+type Scenario = { width: number; height: number; mode: "uniform" | "mask25" | "mask100" }
+type ScenarioResult = {
+  size: string
+  cells: number
+  mode: "uniform" | "mask25" | "mask100"
+  avgMs: number
+  avgNsPerCell: number
+  medianMs: number
+  p95Ms: number
+}
+
 const sepiaMatrix = new Float32Array([
   0.393, 0.769, 0.189, 0, 0.349, 0.686, 0.168, 0, 0.272, 0.534, 0.131, 0, 0, 0, 0, 1,
 ])
 
 const ITERATIONS = 1000
 const WARMUP_ITERATIONS = 100
+const baseScenarios: Array<{ width: number; height: number }> = [
+  { width: 80, height: 24 },
+  { width: 120, height: 40 },
+  { width: 200, height: 60 },
+]
+const scenarios: Scenario[] = baseScenarios.flatMap((scenario) => [
+  { ...scenario, mode: "uniform" },
+  { ...scenario, mode: "mask25" },
+  { ...scenario, mode: "mask100" },
+])
 
 function generateCellMask(width: number, height: number, density: number): Float32Array {
   const totalCells = width * height
@@ -24,33 +45,24 @@ function generateCellMask(width: number, height: number, density: number): Float
   return mask
 }
 
-function calculateStats(samples: number[]): {
-  avgMs: number
-  medianMs: number
-  minMs: number
-  maxMs: number
-} {
+function calculateStats(samples: number[]): { avgMs: number; medianMs: number; p95Ms: number } {
   const sorted = [...samples].sort((a, b) => a - b)
   const total = samples.reduce((sum, value) => sum + value, 0)
+  const avgMs = total / samples.length
+  const mid = Math.floor(sorted.length / 2)
+  const medianMs = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+  const p95Index = Math.floor(0.95 * (sorted.length - 1))
+  const p95Ms = sorted[p95Index]
 
-  return {
-    avgMs: total / samples.length,
-    medianMs: sorted[Math.floor(sorted.length / 2)],
-    minMs: sorted[0],
-    maxMs: sorted[sorted.length - 1],
-  }
+  return { avgMs, medianMs, p95Ms }
 }
 
-interface BenchmarkResult {
-  name: string
-  bufferSize: string
-  cellCount: number
-  avgMs: number
-  medianMs: number
-  minMs: number
-  maxMs: number
-  cellsPerMs: number
-  timePerCellNs: number
+function formatMs(value: number): number {
+  return Number(value.toFixed(4))
+}
+
+function formatNs(value: number): number {
+  return Number(value.toFixed(2))
 }
 
 function fillBufferColors(buffer: OptimizedBuffer): void {
@@ -68,106 +80,49 @@ function fillBufferColors(buffer: OptimizedBuffer): void {
   }
 }
 
-function runMaskBenchmark(name: string, width: number, height: number, cellMask: Float32Array): BenchmarkResult {
+function runScenario({ width, height, mode }: Scenario): ScenarioResult {
   const buffer = OptimizedBuffer.create(width, height, "unicode", {
-    id: `colormatrix-bench-${width}x${height}`,
+    id: `colormatrix-bench-${mode}-${width}x${height}`,
   })
+  const cellMask = mode === "mask25" ? generateCellMask(width, height, 0.25) : generateCellMask(width, height, 1)
+  const cellCount = mode === "uniform" ? width * height : cellMask.length / 3
 
   fillBufferColors(buffer)
 
   for (let i = 0; i < WARMUP_ITERATIONS; i++) {
-    buffer.colorMatrix(sepiaMatrix, cellMask, 1.0, 3)
+    if (mode === "uniform") {
+      buffer.colorMatrixUniform(sepiaMatrix, 1.0, 3)
+    } else {
+      buffer.colorMatrix(sepiaMatrix, cellMask, 1.0, 3)
+    }
   }
 
   const samples = new Array<number>(ITERATIONS)
   for (let i = 0; i < ITERATIONS; i++) {
     const start = performance.now()
-    buffer.colorMatrix(sepiaMatrix, cellMask, 1.0, 3)
+    if (mode === "uniform") {
+      buffer.colorMatrixUniform(sepiaMatrix, 1.0, 3)
+    } else {
+      buffer.colorMatrix(sepiaMatrix, cellMask, 1.0, 3)
+    }
     samples[i] = performance.now() - start
   }
 
   buffer.destroy()
 
   const stats = calculateStats(samples)
-  const cellCount = cellMask.length / 3
 
   return {
-    name,
-    bufferSize: `${width}x${height}`,
-    cellCount,
-    avgMs: stats.avgMs,
-    medianMs: stats.medianMs,
-    minMs: stats.minMs,
-    maxMs: stats.maxMs,
-    cellsPerMs: cellCount / stats.avgMs,
-    timePerCellNs: (stats.avgMs * 1_000_000) / cellCount,
+    size: `${width}x${height}`,
+    cells: cellCount,
+    mode,
+    avgMs: formatMs(stats.avgMs),
+    avgNsPerCell: formatNs((stats.avgMs * 1_000_000) / cellCount),
+    medianMs: formatMs(stats.medianMs),
+    p95Ms: formatMs(stats.p95Ms),
   }
 }
 
-function runUniformBenchmark(width: number, height: number): BenchmarkResult {
-  const buffer = OptimizedBuffer.create(width, height, "unicode", {
-    id: `uniform-bench-${width}x${height}`,
-  })
-
-  fillBufferColors(buffer)
-
-  for (let i = 0; i < WARMUP_ITERATIONS; i++) {
-    buffer.colorMatrixUniform(sepiaMatrix, 1.0, 3)
-  }
-
-  const samples = new Array<number>(ITERATIONS)
-  for (let i = 0; i < ITERATIONS; i++) {
-    const start = performance.now()
-    buffer.colorMatrixUniform(sepiaMatrix, 1.0, 3)
-    samples[i] = performance.now() - start
-  }
-
-  buffer.destroy()
-
-  const stats = calculateStats(samples)
-  const cellCount = width * height
-
-  return {
-    name: "Uniform (full buffer, SIMD)",
-    bufferSize: `${width}x${height}`,
-    cellCount,
-    avgMs: stats.avgMs,
-    medianMs: stats.medianMs,
-    minMs: stats.minMs,
-    maxMs: stats.maxMs,
-    cellsPerMs: cellCount / stats.avgMs,
-    timePerCellNs: (stats.avgMs * 1_000_000) / cellCount,
-  }
-}
-
-const results: BenchmarkResult[] = []
-
-const configs = [
-  { width: 80, height: 24 },
-  { width: 120, height: 40 },
-  { width: 200, height: 60 },
-]
-
-for (const config of configs) {
-  results.push(runUniformBenchmark(config.width, config.height))
-
-  const quarterMask = generateCellMask(config.width, config.height, 0.25)
-  results.push(runMaskBenchmark("Mask 25%", config.width, config.height, quarterMask))
-
-  const fullMask = generateCellMask(config.width, config.height, 1)
-  results.push(runMaskBenchmark("Mask 100%", config.width, config.height, fullMask))
-}
-
-console.log(`colorMatrix benchmark (${ITERATIONS} iterations, ${WARMUP_ITERATIONS} warmup)`)
-console.log("Buffer    | Test                  | Cells | Avg ms | Median | Min   | Max   | Time/Cell")
-console.log("----------------------------------------------------------------------------------------")
-
-for (const result of results) {
-  const line =
-    `${result.bufferSize.padEnd(9)} | ${result.name.padEnd(21)} | ${result.cellCount.toString().padStart(5)} | ` +
-    `${result.avgMs.toFixed(4).padStart(6)} | ${result.medianMs.toFixed(4).padStart(6)} | ` +
-    `${result.minMs.toFixed(4).padStart(5)} | ${result.maxMs.toFixed(4).padStart(5)} | ` +
-    `${result.timePerCellNs.toFixed(1).padStart(9)}ns`
-
-  console.log(line)
-}
+console.log(`ColorMatrix Benchmark (${ITERATIONS} iterations per scenario)`)
+const results = scenarios.map(runScenario)
+console.table(results)
