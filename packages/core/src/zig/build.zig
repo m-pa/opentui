@@ -26,6 +26,8 @@ const SUPPORTED_TARGETS = [_]SupportedTarget{
     .{ .zig_target = "aarch64-windows-gnu", .output_name = "aarch64-windows", .description = "Windows aarch64" },
 };
 
+const DEFAULT_MACOS_SDK_PATH = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk";
+
 const LIB_NAME = "opentui";
 const ROOT_SOURCE_FILE = "lib.zig";
 
@@ -258,6 +260,10 @@ fn buildTarget(
 ) !void {
     const target_query = try std.Target.Query.parse(.{ .arch_os_abi = zig_target });
     const target = b.resolveTargetQuery(target_query);
+    const c_flags: []const []const u8 = if (target.result.os.tag == .macos)
+        &.{ "-std=c99", "-DMA_NO_RUNTIME_LINKING" }
+    else
+        &.{"-std=c99"};
 
     const module = b.createModule(.{
         .root_source_file = b.path(ROOT_SOURCE_FILE),
@@ -277,8 +283,25 @@ fn buildTarget(
     lib.linkLibC();
     lib.addCSourceFile(.{
         .file = b.path("miniaudio_shim.c"),
-        .flags = &.{"-std=c99"},
+        .flags = c_flags,
     });
+
+    switch (target.result.os.tag) {
+        .macos => {
+            lib.linkFramework("CoreFoundation");
+            lib.linkFramework("CoreAudio");
+            lib.linkFramework("AudioToolbox");
+            lib.linkSystemLibrary("pthread");
+            lib.addFrameworkPath(.{ .cwd_relative = DEFAULT_MACOS_SDK_PATH });
+            lib.addFrameworkPath(.{ .cwd_relative = b.fmt("{s}/System/Library/Frameworks", .{DEFAULT_MACOS_SDK_PATH}) });
+            lib.addLibraryPath(.{ .cwd_relative = b.fmt("{s}/usr/lib", .{DEFAULT_MACOS_SDK_PATH}) });
+        },
+        .linux => {
+            lib.linkSystemLibrary("dl");
+            lib.linkSystemLibrary("pthread");
+        },
+        else => {},
+    }
 
     const install_dir = b.addInstallArtifact(lib, .{
         .dest_dir = .{
