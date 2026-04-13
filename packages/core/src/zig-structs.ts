@@ -259,3 +259,39 @@ export const ReserveInfoStruct = defineStruct(
     }),
   },
 )
+
+export type AudioBus = "master" | "sfx" | "music" | "ui"
+
+export type AudioVoiceOptions = {
+  volume?: number
+  pan?: number
+  looped?: boolean
+  bus?: AudioBus
+}
+
+export type AudioStats = {
+  soundsLoaded: number
+  voicesActive: number
+  framesMixed: bigint
+  underruns: number
+  lastPeak: number
+  lastRms: number
+}
+
+const AudioBusEnum = defineEnum({ master: 0, sfx: 1, music: 2, ui: 3 }, "u8")
+
+export const AudioVoiceOptionsStruct = defineStruct([
+  ["volume", "f32", { default: 1 }],
+  ["pan", "f32", { default: 0 }],
+  ["looped", "bool_u8", { default: false }],
+  ["bus", AudioBusEnum, { default: "sfx" }],
+])
+
+export const AudioStatsStruct = defineStruct([
+  ["soundsLoaded", "u32"],
+  ["voicesActive", "u32"],
+  ["framesMixed", "u64"],
+  ["underruns", "u32"],
+  ["lastPeak", "f32"],
+  ["lastRms", "f32"],
+])

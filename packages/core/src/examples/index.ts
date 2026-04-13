@@ -73,6 +73,7 @@ import * as focusRestoreDemo from "./focus-restore-demo.js"
 import { setupCommonDemoKeys } from "./lib/standalone-keys.js"
 import * as corePluginSlotsDemo from "./core-plugin-slots-demo.js"
 import * as wideGraphemeOverlayDemo from "./wide-grapheme-overlay-demo.js"
+import * as nativeAudioDemo from "./native-audio-demo.js"
 
 interface Example {
   name: string
@@ -466,6 +467,12 @@ const examples: Example[] = [
     description: "Test focus restore - alt-tab away and back to verify mouse tracking resumes",
     run: focusRestoreDemo.run,
     destroy: focusRestoreDemo.destroy,
+  },
+  {
+    name: "NativeAudio Demo",
+    description: "WAV-based native mixer with buses and live meter stats",
+    run: nativeAudioDemo.run,
+    destroy: nativeAudioDemo.destroy,
   },
 ]
 

@@ -18,6 +18,7 @@ const logger = @import("logger.zig");
 const event_bus = @import("event-bus.zig");
 const utils = @import("utils.zig");
 const native_span_feed = @import("native-span-feed.zig");
+const native_audio = @import("audio.zig");
 const buffer_effects = @import("buffer-methods.zig");
 
 pub const OptimizedBuffer = buffer.OptimizedBuffer;
@@ -27,6 +28,7 @@ pub const RGBA = buffer.RGBA;
 
 comptime {
     _ = native_span_feed;
+    _ = native_audio;
 }
 
 export fn setLogCallback(callback: ?*const fn (level: u8, msgPtr: [*]const u8, msgLen: usize) callconv(.c) void) void {
@@ -157,6 +159,46 @@ fn getLargeAllocationCount() u64 {
 
 export fn createNativeSpanFeed(options_ptr: ?*const native_span_feed.Options) ?*native_span_feed.Stream {
     return native_span_feed.createNativeSpanFeedWithAllocator(globalAllocator, options_ptr);
+}
+
+export fn createAudioEngine() ?*native_audio.Engine {
+    return native_audio.create(globalAllocator);
+}
+
+export fn destroyAudioEngine(engine: ?*native_audio.Engine) void {
+    native_audio.destroy(engine);
+}
+
+export fn audioStart(engine: ?*native_audio.Engine) i32 {
+    return native_audio.start(engine);
+}
+
+export fn audioStop(engine: ?*native_audio.Engine) i32 {
+    return native_audio.stop(engine);
+}
+
+export fn audioLoadWav(engine: ?*native_audio.Engine, data_ptr: ?[*]const u8, data_len: usize, out_sound_id: ?*u32) i32 {
+    return native_audio.loadWav(engine, data_ptr, data_len, out_sound_id);
+}
+
+export fn audioPlay(engine: ?*native_audio.Engine, sound_id: u32, options_ptr: ?*const native_audio.VoiceOptions, out_voice_id: ?*u32) i32 {
+    return native_audio.play(engine, sound_id, options_ptr, out_voice_id);
+}
+
+export fn audioStopVoice(engine: ?*native_audio.Engine, voice_id: u32) i32 {
+    return native_audio.stopVoice(engine, voice_id);
+}
+
+export fn audioSetBusVolume(engine: ?*native_audio.Engine, bus: u8, volume: f32) i32 {
+    return native_audio.setBusVolume(engine, bus, volume);
+}
+
+export fn audioMixToBuffer(engine: ?*native_audio.Engine, out_ptr: ?[*]f32, frame_count: u32, channels: u8) i32 {
+    return native_audio.mixToBuffer(engine, out_ptr, frame_count, channels);
+}
+
+export fn audioGetStats(engine: ?*native_audio.Engine, out_stats: ?*native_audio.Stats) i32 {
+    return native_audio.getStats(engine, out_stats);
 }
 
 export fn getArenaAllocatedBytes() usize {

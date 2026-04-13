@@ -1,0 +1,317 @@
+#!/usr/bin/env bun
+
+import {
+  BoxRenderable,
+  CliRenderer,
+  NativeAudio,
+  TextRenderable,
+  createCliRenderer,
+  type AudioBus,
+  type KeyEvent,
+} from "../index.js"
+import { setupCommonDemoKeys } from "./lib/standalone-keys.js"
+
+type SoundPreset = {
+  name: string
+  frequency: number
+  durationMs: number
+  volume: number
+  send: number
+  bus: AudioBus
+  decay: number
+}
+
+const PRESETS: SoundPreset[] = [
+  { name: "Jump", frequency: 540, durationMs: 120, volume: 0.8, send: 0.18, bus: "sfx", decay: 0.82 },
+  { name: "Coin", frequency: 980, durationMs: 90, volume: 0.65, send: 0.12, bus: "ui", decay: 0.86 },
+  { name: "Thud", frequency: 140, durationMs: 200, volume: 0.9, send: 0.4, bus: "sfx", decay: 0.75 },
+]
+
+const SAMPLE_RATE = 48_000
+
+let root: BoxRenderable | null = null
+let titleText: TextRenderable | null = null
+let statusText: TextRenderable | null = null
+let statsText: TextRenderable | null = null
+let meterText: TextRenderable | null = null
+let controlsText: TextRenderable | null = null
+let outputText: TextRenderable | null = null
+
+let keyHandler: ((event: KeyEvent) => void) | null = null
+
+let audio: NativeAudio | null = null
+let soundIds: number[] = []
+let musicSoundId: number | null = null
+let musicVoiceId: number | null = null
+let masterVolume = 1
+
+let lastAction = "Ready"
+
+function buildMonoPcm16Wav(options: { frequency: number; durationMs: number; amplitude: number; decay: number }): Uint8Array {
+  const sampleCount = Math.max(1, Math.floor((SAMPLE_RATE * options.durationMs) / 1000))
+  const channels = 1
+  const bitsPerSample = 16
+  const bytesPerSample = bitsPerSample / 8
+  const dataSize = sampleCount * channels * bytesPerSample
+  const out = new Uint8Array(44 + dataSize)
+  const view = new DataView(out.buffer)
+
+  out.set([0x52, 0x49, 0x46, 0x46], 0)
+  view.setUint32(4, out.length - 8, true)
+  out.set([0x57, 0x41, 0x56, 0x45], 8)
+  out.set([0x66, 0x6d, 0x74, 0x20], 12)
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, channels, true)
+  view.setUint32(24, SAMPLE_RATE, true)
+  view.setUint32(28, SAMPLE_RATE * channels * bytesPerSample, true)
+  view.setUint16(32, channels * bytesPerSample, true)
+  view.setUint16(34, bitsPerSample, true)
+  out.set([0x64, 0x61, 0x74, 0x61], 36)
+  view.setUint32(40, dataSize, true)
+
+  for (let i = 0; i < sampleCount; i += 1) {
+    const t = i / SAMPLE_RATE
+    const envelope = Math.pow(Math.max(0, 1 - i / sampleCount), options.decay)
+    const value = Math.sin(2 * Math.PI * options.frequency * t) * options.amplitude * envelope
+    const sample = Math.round(Math.max(-1, Math.min(1, value)) * 32767)
+    view.setInt16(44 + i * 2, sample, true)
+  }
+
+  return out
+}
+
+function meterBar(value: number, width = 28): string {
+  const clamped = Math.max(0, Math.min(1, value))
+  const filled = Math.floor(clamped * width)
+  return `[${"#".repeat(filled)}${"-".repeat(width - filled)}]`
+}
+
+function updateHeader(): void {
+  if (!statusText) return
+  statusText.content = `Action: ${lastAction}`
+
+  if (outputText && audio) {
+    outputText.content = `Output: ${audio.isStarted() ? "ON (miniaudio)" : "OFF"}`
+  }
+}
+
+function triggerSound(index: number): void {
+  if (!audio || index < 0 || index >= soundIds.length) return
+  const preset = PRESETS[index]
+  audio.play(soundIds[index], {
+    volume: preset.volume,
+    pan: index === 0 ? -0.2 : index === 1 ? 0.2 : 0,
+    looped: false,
+    bus: preset.bus,
+    send: preset.send,
+  })
+  lastAction = `${preset.name} trigger`
+  updateHeader()
+}
+
+function updateAudioView(): void {
+  if (!audio || !meterText || !statsText) return
+
+  const stats = audio.getStats()
+  if (!stats) {
+    statsText.content = "Stats unavailable"
+    meterText.content = "Peak [----------------------------] 0.000\nRMS  [----------------------------] 0.000"
+    return
+  }
+
+  const peak = stats.lastPeak
+  const rms = stats.lastRms
+
+  meterText.content = `Peak ${meterBar(peak)} ${peak.toFixed(3)}\nRMS  ${meterBar(rms)} ${rms.toFixed(3)}`
+
+  statsText.content =
+    `sounds=${stats.soundsLoaded} voices=${stats.voicesActive} frames=${stats.framesMixed.toString()} underruns=${stats.underruns}`
+}
+
+export async function run(renderer: CliRenderer): Promise<void> {
+  renderer.setBackgroundColor("#111319")
+  renderer.start()
+
+  audio = NativeAudio.create({ autoStart: true })
+  masterVolume = 1
+  audio.setBusVolume("master", masterVolume)
+  audio.setBusVolume("sfx", 1)
+  audio.setBusVolume("ui", 0.9)
+
+  soundIds = PRESETS.map((preset) => {
+    const wav = buildMonoPcm16Wav({
+      frequency: preset.frequency,
+      durationMs: preset.durationMs,
+      amplitude: 0.95,
+      decay: preset.decay,
+    })
+    return audio!.loadWav(wav)
+  })
+
+  const bgmUrl = new URL("../../dev/bgm2.wav", import.meta.url)
+  musicSoundId = audio.loadWav(await Bun.file(bgmUrl).arrayBuffer())
+
+  root = new BoxRenderable(renderer, {
+    id: "native-audio-demo-root",
+    width: "100%",
+    height: "100%",
+    flexDirection: "column",
+    padding: 1,
+    backgroundColor: "#111319",
+  })
+  renderer.root.add(root)
+
+  titleText = new TextRenderable(renderer, {
+    id: "native-audio-demo-title",
+    content: "NativeAudio Demo - WAV mixer + buses",
+    fg: "#93C5FD",
+    height: 1,
+  })
+  root.add(titleText)
+
+  statusText = new TextRenderable(renderer, {
+    id: "native-audio-demo-status",
+    content: "Action: Ready",
+    fg: "#EAB308",
+    height: 1,
+  })
+  root.add(statusText)
+
+  meterText = new TextRenderable(renderer, {
+    id: "native-audio-demo-meter",
+    content: "Peak [----------------------------] 0.000\nRMS  [----------------------------] 0.000",
+    fg: "#34D399",
+    height: 2,
+    marginTop: 1,
+  })
+  root.add(meterText)
+
+  statsText = new TextRenderable(renderer, {
+    id: "native-audio-demo-stats",
+    content: "sounds=0 voices=0 frames=0 underruns=0",
+    fg: "#A78BFA",
+    height: 1,
+    marginTop: 1,
+  })
+  root.add(statsText)
+
+  outputText = new TextRenderable(renderer, {
+    id: "native-audio-demo-output",
+    content: "Output: OFF",
+    fg: "#FCA5A5",
+    height: 1,
+    marginTop: 1,
+  })
+  root.add(outputText)
+
+  controlsText = new TextRenderable(renderer, {
+    id: "native-audio-demo-controls",
+    content:
+      "1 Jump 2 Coin 3 Thud B bgm | M/N master | Esc back",
+    fg: "#9CA3AF",
+    height: 2,
+    marginTop: 1,
+  })
+  root.add(controlsText)
+
+  updateHeader()
+
+  if (musicSoundId) {
+    musicVoiceId = audio.play(musicSoundId, {
+      bus: "music",
+      volume: 0.42,
+      pan: 0,
+      send: 0.22,
+      looped: true,
+    })
+    lastAction = "BGM auto start"
+    updateHeader()
+  }
+
+  updateAudioView()
+
+  keyHandler = (event: KeyEvent) => {
+    if (!audio) return
+    switch (event.name) {
+      case "1":
+        triggerSound(0)
+        break
+      case "2":
+        triggerSound(1)
+        break
+      case "3":
+        triggerSound(2)
+        break
+      case "b":
+        if (!musicSoundId) break
+        if (musicVoiceId) {
+          audio.stopVoice(musicVoiceId)
+          musicVoiceId = null
+          lastAction = "BGM stop"
+        } else {
+          musicVoiceId = audio.play(musicSoundId, {
+            bus: "music",
+            volume: 0.5,
+            pan: 0,
+            send: 0.25,
+            looped: true,
+          })
+          lastAction = "BGM start"
+        }
+        updateHeader()
+        break
+      case "m":
+      case "n": {
+        const stats = audio.getStats()
+        const delta = event.name === "m" ? -0.1 : 0.1
+        masterVolume = Math.max(0, Math.min(2, masterVolume + delta))
+        audio.setBusVolume("master", masterVolume)
+        lastAction = `Master ${masterVolume.toFixed(2)} voices=${stats?.voicesActive ?? 0}`
+        updateHeader()
+        break
+      }
+    }
+  }
+
+  renderer.keyInput.on("keypress", keyHandler)
+
+  renderer.setFrameCallback(async () => {
+    updateAudioView()
+  })
+}
+
+export function destroy(renderer: CliRenderer): void {
+  renderer.clearFrameCallbacks()
+
+  if (keyHandler) {
+    renderer.keyInput.off("keypress", keyHandler)
+    keyHandler = null
+  }
+
+  renderer.root.remove("native-audio-demo-root")
+  root = null
+  titleText = null
+  statusText = null
+  statsText = null
+  outputText = null
+  meterText = null
+  controlsText = null
+
+  audio?.dispose()
+  audio = null
+  soundIds = []
+  musicSoundId = null
+  musicVoiceId = null
+  masterVolume = 1
+  lastAction = "Ready"
+}
+
+if (import.meta.main) {
+  const renderer = await createCliRenderer({
+    exitOnCtrlC: true,
+    targetFps: 60,
+  })
+  await run(renderer)
+  setupCommonDemoKeys(renderer)
+}

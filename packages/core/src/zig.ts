@@ -32,6 +32,8 @@ import {
   NativeSpanFeedOptionsStruct,
   NativeSpanFeedStatsStruct,
   ReserveInfoStruct,
+  AudioVoiceOptionsStruct,
+  AudioStatsStruct,
   BuildOptionsStruct,
   AllocatorStatsStruct,
 } from "./zig-structs.js"
@@ -39,6 +41,9 @@ import type {
   NativeSpanFeedOptions,
   NativeSpanFeedStats,
   ReserveInfo,
+  AudioBus,
+  AudioVoiceOptions,
+  AudioStats,
   BuildOptions,
   AllocatorStats,
 } from "./zig-structs.js"
@@ -99,6 +104,7 @@ registerEnvVar({
 const CURSOR_STYLE_TO_ID = { block: 0, line: 1, underline: 2, default: 3 } as const
 const CURSOR_ID_TO_STYLE = ["block", "line", "underline", "default"] as const
 const MOUSE_STYLE_TO_ID = { default: 0, pointer: 1, text: 2, crosshair: 3, move: 4, "not-allowed": 5 } as const
+const AUDIO_BUS_TO_ID: Record<AudioBus, number> = { master: 0, sfx: 1, music: 2, ui: 3 }
 
 // Global singleton state for FFI tracing to prevent duplicate exit handlers
 let globalTraceSymbols: Record<string, number[]> | null = null
@@ -1085,6 +1091,48 @@ function getOpenTUILib(libPath?: string) {
       returns: "void",
     },
 
+    // NativeAudio
+    createAudioEngine: {
+      args: [],
+      returns: "ptr",
+    },
+    destroyAudioEngine: {
+      args: ["ptr"],
+      returns: "void",
+    },
+    audioStart: {
+      args: ["ptr"],
+      returns: "i32",
+    },
+    audioStop: {
+      args: ["ptr"],
+      returns: "i32",
+    },
+    audioLoadWav: {
+      args: ["ptr", "ptr", "u64", "ptr"],
+      returns: "i32",
+    },
+    audioPlay: {
+      args: ["ptr", "u32", "ptr", "ptr"],
+      returns: "i32",
+    },
+    audioStopVoice: {
+      args: ["ptr", "u32"],
+      returns: "i32",
+    },
+    audioSetBusVolume: {
+      args: ["ptr", "u8", "f32"],
+      returns: "i32",
+    },
+    audioMixToBuffer: {
+      args: ["ptr", "ptr", "u32", "u8"],
+      returns: "i32",
+    },
+    audioGetStats: {
+      args: ["ptr", "ptr"],
+      returns: "i32",
+    },
+
     // NativeSpanFeed
     createNativeSpanFeed: {
       args: ["ptr"],
@@ -1822,6 +1870,17 @@ export interface RenderLib {
   ) => { ptr: Pointer; data: Array<{ width: number; char: number }> } | null
   freeUnicode: (encoded: { ptr: Pointer; data: Array<{ width: number; char: number }> }) => void
   bufferDrawChar: (buffer: Pointer, char: number, x: number, y: number, fg: RGBA, bg: RGBA, attributes?: number) => void
+
+  createAudioEngine: () => Pointer | null
+  destroyAudioEngine: (engine: Pointer) => void
+  audioStart: (engine: Pointer) => number
+  audioStop: (engine: Pointer) => number
+  audioLoadWav: (engine: Pointer, data: Uint8Array) => { status: number; soundId: number | null }
+  audioPlay: (engine: Pointer, soundId: number, options?: AudioVoiceOptions) => { status: number; voiceId: number | null }
+  audioStopVoice: (engine: Pointer, voiceId: number) => number
+  audioSetBusVolume: (engine: Pointer, bus: AudioBus, volume: number) => number
+  audioMixToBuffer: (engine: Pointer, outBuffer: Float32Array, frameCount: number, channels: number) => number
+  audioGetStats: (engine: Pointer) => AudioStats | null
 
   registerNativeSpanFeedStream: (stream: Pointer, handler: NativeSpanFeedEventHandler) => void
   unregisterNativeSpanFeedStream: (stream: Pointer) => void
@@ -3698,6 +3757,74 @@ class FFIRenderLib implements RenderLib {
     attributes: number = 0,
   ): void {
     this.opentui.symbols.bufferDrawChar(buffer, char, x, y, fg.buffer, bg.buffer, attributes)
+  }
+
+  public createAudioEngine(): Pointer | null {
+    const enginePtr = this.opentui.symbols.createAudioEngine()
+    return enginePtr ? toPointer(enginePtr) : null
+  }
+
+  public destroyAudioEngine(engine: Pointer): void {
+    this.opentui.symbols.destroyAudioEngine(engine)
+  }
+
+  public audioStart(engine: Pointer): number {
+    return this.opentui.symbols.audioStart(engine)
+  }
+
+  public audioStop(engine: Pointer): number {
+    return this.opentui.symbols.audioStop(engine)
+  }
+
+  public audioLoadWav(engine: Pointer, data: Uint8Array): { status: number; soundId: number | null } {
+    const outBuffer = new ArrayBuffer(4)
+    const status = this.opentui.symbols.audioLoadWav(engine, ptr(data), data.length, ptr(outBuffer))
+    if (status !== 0) {
+      return { status, soundId: null }
+    }
+    const view = new Uint32Array(outBuffer)
+    return { status, soundId: view[0] }
+  }
+
+  public audioPlay(engine: Pointer, soundId: number, options?: AudioVoiceOptions): { status: number; voiceId: number | null } {
+    const outBuffer = new ArrayBuffer(4)
+    const optionsBuffer = options ? AudioVoiceOptionsStruct.pack(options) : null
+    const status = this.opentui.symbols.audioPlay(engine, soundId, optionsBuffer ? ptr(optionsBuffer) : null, ptr(outBuffer))
+    if (status !== 0) {
+      return { status, voiceId: null }
+    }
+    const view = new Uint32Array(outBuffer)
+    return { status, voiceId: view[0] }
+  }
+
+  public audioStopVoice(engine: Pointer, voiceId: number): number {
+    return this.opentui.symbols.audioStopVoice(engine, voiceId)
+  }
+
+  public audioSetBusVolume(engine: Pointer, bus: AudioBus, volume: number): number {
+    const busId = AUDIO_BUS_TO_ID[bus]
+    return this.opentui.symbols.audioSetBusVolume(engine, busId, volume)
+  }
+
+  public audioMixToBuffer(engine: Pointer, outBuffer: Float32Array, frameCount: number, channels: number): number {
+    return this.opentui.symbols.audioMixToBuffer(engine, ptr(outBuffer), frameCount, channels)
+  }
+
+  public audioGetStats(engine: Pointer): AudioStats | null {
+    const statsBuffer = new ArrayBuffer(AudioStatsStruct.size)
+    const status = this.opentui.symbols.audioGetStats(engine, ptr(statsBuffer))
+    if (status !== 0) {
+      return null
+    }
+    const stats = AudioStatsStruct.unpack(statsBuffer)
+    return {
+      soundsLoaded: stats.soundsLoaded,
+      voicesActive: stats.voicesActive,
+      framesMixed: typeof stats.framesMixed === "bigint" ? stats.framesMixed : BigInt(stats.framesMixed),
+      underruns: stats.underruns,
+      lastPeak: stats.lastPeak,
+      lastRms: stats.lastRms,
+    }
   }
 
   public registerNativeSpanFeedStream(stream: Pointer, handler: NativeSpanFeedEventHandler): void {
