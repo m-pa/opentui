@@ -138,14 +138,7 @@ import { INVERT_MATRIX, TargetChannel } from "@opentui/core"
 canvas.frameBuffer.colorMatrixUniform(INVERT_MATRIX, 1.0, TargetChannel.Both)
 
 // Per-cell transform with explicit mask
-const cellMask = new Float32Array([
-  10,
-  5,
-  1.0,
-  11,
-  5,
-  0.5,
-])
+const cellMask = new Float32Array([10, 5, 1.0, 11, 5, 0.5])
 canvas.frameBuffer.colorMatrix(INVERT_MATRIX, cellMask, 1.0, TargetChannel.FG)
 ```
 
