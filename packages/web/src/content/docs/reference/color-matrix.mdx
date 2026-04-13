@@ -63,7 +63,7 @@ Use the `TargetChannel` enum to choose which color buffers are affected:
 - `TargetChannel.BG` (`2`): background only
 - `TargetChannel.Both` (`3`): foreground + background
 
-## colorMatrix cell mask format
+## `colorMatrix` cell mask format
 
 `cellMask` uses packed triplets:
 
@@ -80,7 +80,7 @@ Use the `TargetChannel` enum to choose which color buffers are affected:
 This method is useful for effects that only affect part of the buffer, such as scanlines, vignettes, or localized color
 grading.
 
-## colorMatrixUniform behavior
+## `colorMatrixUniform` behavior
 
 `colorMatrixUniform` applies the same matrix to every pixel in the selected channel(s).
 
