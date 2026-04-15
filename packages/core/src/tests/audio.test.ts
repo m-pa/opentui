@@ -3,11 +3,15 @@ import { Audio } from "../Audio.js"
 
 const SAMPLE_RATE = 48_000
 
-function buildMonoPcm16Wav(samples: number[]): Uint8Array {
-  const channels = 1
+function buildPcm16Wav(samples: number[], channels: number): Uint8Array {
+  if (channels <= 0 || samples.length % channels !== 0) {
+    throw new Error(`Invalid PCM payload for channel count ${channels}`)
+  }
+
   const bitsPerSample = 16
   const bytesPerSample = bitsPerSample / 8
-  const dataSize = samples.length * bytesPerSample
+  const frameCount = samples.length / channels
+  const dataSize = frameCount * channels * bytesPerSample
   const byteRate = SAMPLE_RATE * channels * bytesPerSample
   const blockAlign = channels * bytesPerSample
   const totalSize = 44 + dataSize
@@ -36,6 +40,10 @@ function buildMonoPcm16Wav(samples: number[]): Uint8Array {
   return out
 }
 
+function buildMonoPcm16Wav(samples: number[]): Uint8Array {
+  return buildPcm16Wav(samples, 1)
+}
+
 const instances: Audio[] = []
 
 afterEach(() => {
@@ -59,4 +67,51 @@ test("Audio loads wav and mixes frames", () => {
   expect(mixed.length).toBe(12)
   expect(mixed.some((sample) => Math.abs(sample) > 0.001)).toBe(true)
   expect(audio.getStats()?.soundsLoaded).toBe(1)
+})
+
+test("Audio mixes into mono and multichannel output buffers", () => {
+  const audio = Audio.create({ autoStart: false })
+  instances.push(audio)
+
+  const wav = buildMonoPcm16Wav([0.6, -0.2, 0.4, -0.4, 0.3, -0.1])
+  const sound = audio.loadSound(wav)
+
+  audio.start()
+  sound.play({ volume: 1, pan: 0, loop: true })
+
+  const mono = audio.mixFrames(6, 1)
+  expect(mono.length).toBe(6)
+  expect(mono.some((sample) => Math.abs(sample) > 0.001)).toBe(true)
+
+  const quad = audio.mixFrames(6, 4)
+  expect(quad.length).toBe(24)
+  expect(quad.some((sample, index) => index % 4 < 2 && Math.abs(sample) > 0.001)).toBe(true)
+  for (let frame = 0; frame < 6; frame += 1) {
+    expect(quad[frame * 4 + 2]).toBe(0)
+    expect(quad[frame * 4 + 3]).toBe(0)
+  }
+})
+
+test("Audio counts underruns when callback cannot lock engine", async () => {
+  const audio = Audio.create({ autoStart: false })
+  instances.push(audio)
+
+  const wave = Array.from({ length: 2048 }, (_, index) => Math.sin((Math.PI * 2 * index) / 32) * 0.8)
+  const wav = buildMonoPcm16Wav(wave)
+  const sound = audio.loadSound(wav)
+
+  audio.start()
+  sound.play({ volume: 1, pan: 0, loop: true })
+
+  const initialUnderruns = audio.getStats()?.underruns ?? 0
+  const deadline = Date.now() + 1_500
+
+  while ((audio.getStats()?.underruns ?? 0) === initialUnderruns && Date.now() < deadline) {
+    audio.mixFrames(700_000, 2)
+    await Bun.sleep(10)
+  }
+
+  const finalStats = audio.getStats()
+  expect(finalStats).not.toBeNull()
+  expect(finalStats?.underruns ?? 0).toBeGreaterThan(initialUnderruns)
 })

@@ -63,6 +63,7 @@ pub const Engine = struct {
     device: c.ma_device = undefined,
     has_device: bool = false,
     output_channels: u8 = 2,
+    underrun_count: u32 = 0,
 
     pub fn init(allocator: std.mem.Allocator) Engine {
         return .{
@@ -83,6 +84,7 @@ pub const Engine = struct {
             .device = undefined,
             .has_device = false,
             .output_channels = 2,
+            .underrun_count = 0,
         };
     }
 
@@ -119,10 +121,38 @@ fn decoderAsDataSource(decoder: *c.ma_decoder) *c.ma_data_source {
     return @ptrCast(decoder);
 }
 
-fn decodeSoundKnownLength(allocator: std.mem.Allocator, data_source: *c.ma_data_source, frame_count: c.ma_uint64) !Sound {
-    const channels: usize = 2;
+const DecodedDataSourceFormat = struct {
+    channels: u16,
+    sample_rate: u32,
+};
+
+fn incrementUnderruns(engine: *Engine) void {
+    _ = @atomicRmw(u32, &engine.underrun_count, .Add, 1, .monotonic);
+}
+
+fn loadUnderruns(engine: *Engine) u32 {
+    return @atomicLoad(u32, &engine.underrun_count, .monotonic);
+}
+
+fn getDataSourceFormat(data_source: *c.ma_data_source) !DecodedDataSourceFormat {
+    var format: c.ma_format = c.ma_format_unknown;
+    var channels: c.ma_uint32 = 0;
+    var sample_rate: c.ma_uint32 = 0;
+
+    const format_result = c.ma_data_source_get_data_format(data_source, &format, &channels, &sample_rate, null, 0);
+    if (format_result != c.MA_SUCCESS) return error.DecodeFailed;
+    if (channels == 0 or sample_rate == 0) return error.DecodeFailed;
+
+    return .{
+        .channels = std.math.cast(u16, channels) orelse return error.DecodeFailed,
+        .sample_rate = @intCast(sample_rate),
+    };
+}
+
+fn decodeSoundKnownLength(allocator: std.mem.Allocator, data_source: *c.ma_data_source, frame_count: c.ma_uint64, channels: u16, sample_rate: u32) !Sound {
+    const channel_count: usize = channels;
     const frame_count_usize = std.math.cast(usize, frame_count) orelse return error.OutOfMemory;
-    const sample_count = try std.math.mul(usize, frame_count_usize, channels);
+    const sample_count = try std.math.mul(usize, frame_count_usize, channel_count);
 
     const seek_result = c.ma_data_source_seek_to_pcm_frame(data_source, 0);
     if (seek_result != c.MA_SUCCESS) return error.DecodeFailed;
@@ -135,32 +165,36 @@ fn decodeSoundKnownLength(allocator: std.mem.Allocator, data_source: *c.ma_data_
     if (result != c.MA_SUCCESS and result != c.MA_AT_END) return error.DecodeFailed;
 
     const frames_read_usize = std.math.cast(usize, frames_read) orelse return error.OutOfMemory;
-    const final_sample_count = try std.math.mul(usize, frames_read_usize, channels);
+    const final_sample_count = try std.math.mul(usize, frames_read_usize, channel_count);
     if (final_sample_count != sample_count) {
         samples = try allocator.realloc(samples, final_sample_count);
     }
 
     return .{
-        .channels = @intCast(channels),
-        .sample_rate = 48_000,
+        .channels = channels,
+        .sample_rate = sample_rate,
         .samples = samples,
     };
 }
 
-fn decodeSoundUnknownLength(allocator: std.mem.Allocator, data_source: *c.ma_data_source) !Sound {
-    const channels: usize = 2;
+fn decodeSoundUnknownLength(allocator: std.mem.Allocator, data_source: *c.ma_data_source, channels: u16, sample_rate: u32) !Sound {
+    const channel_count: usize = channels;
     const chunk_frames: c.ma_uint64 = 4096;
-    var chunk: [4096 * channels]f32 = undefined;
+    const chunk_frames_usize: usize = @intCast(chunk_frames);
+    const chunk_sample_count = try std.math.mul(usize, chunk_frames_usize, channel_count);
+    const chunk = try allocator.alloc(f32, chunk_sample_count);
+    defer allocator.free(chunk);
+
     var samples = std.ArrayList(f32).empty;
     errdefer samples.deinit(allocator);
 
     while (true) {
         var frames_read: c.ma_uint64 = 0;
-        const result = c.ma_data_source_read_pcm_frames(data_source, chunk[0..].ptr, chunk_frames, &frames_read);
+        const result = c.ma_data_source_read_pcm_frames(data_source, chunk.ptr, chunk_frames, &frames_read);
         if (result != c.MA_SUCCESS and result != c.MA_AT_END) return error.DecodeFailed;
 
         const frames_read_usize = std.math.cast(usize, frames_read) orelse return error.OutOfMemory;
-        const sample_count = try std.math.mul(usize, frames_read_usize, channels);
+        const sample_count = try std.math.mul(usize, frames_read_usize, channel_count);
         if (sample_count > 0) {
             try samples.appendSlice(allocator, chunk[0..sample_count]);
         }
@@ -169,28 +203,29 @@ fn decodeSoundUnknownLength(allocator: std.mem.Allocator, data_source: *c.ma_dat
     }
 
     return .{
-        .channels = @intCast(channels),
-        .sample_rate = 48_000,
+        .channels = channels,
+        .sample_rate = sample_rate,
         .samples = try samples.toOwnedSlice(allocator),
     };
 }
 
 fn decodeSoundFromMemory(allocator: std.mem.Allocator, bytes: []const u8) !Sound {
-    var config = c.ma_decoder_config_init(c.ma_format_f32, 2, 48_000);
+    var config = c.ma_decoder_config_init(c.ma_format_f32, 0, 48_000);
     var decoder: c.ma_decoder = undefined;
     const init_result = c.ma_decoder_init_memory(bytes.ptr, bytes.len, &config, &decoder);
     if (init_result != c.MA_SUCCESS) return error.DecodeFailed;
     defer _ = c.ma_decoder_uninit(&decoder);
 
     const data_source = decoderAsDataSource(&decoder);
+    const decoded_format = try getDataSourceFormat(data_source);
     var frame_count: c.ma_uint64 = 0;
     const length_result = c.ma_data_source_get_length_in_pcm_frames(data_source, &frame_count);
 
     if (length_result == c.MA_SUCCESS) {
-        return decodeSoundKnownLength(allocator, data_source, frame_count);
+        return decodeSoundKnownLength(allocator, data_source, frame_count, decoded_format.channels, decoded_format.sample_rate);
     }
 
-    return decodeSoundUnknownLength(allocator, data_source);
+    return decodeSoundUnknownLength(allocator, data_source, decoded_format.channels, decoded_format.sample_rate);
 }
 
 pub fn create(allocator: std.mem.Allocator) ?*Engine {
@@ -225,14 +260,15 @@ pub fn start(engine: ?*Engine) i32 {
         var config = c.ma_device_config_init(c.ma_device_type_playback);
         config.sampleRate = 48000;
         config.playback.format = c.ma_format_f32;
-        config.playback.channels = 2;
+        config.playback.channels = 0;
         config.dataCallback = audioCallback;
         config.pUserData = e;
 
         const init_result = c.ma_device_init(null, &config, &e.device);
         if (init_result != c.MA_SUCCESS) return Status.err_device;
         e.has_device = true;
-        e.output_channels = @intCast(e.device.playback.channels);
+        const device_channels = if (e.device.playback.channels == 0) 2 else e.device.playback.channels;
+        e.output_channels = @intCast(device_channels);
     }
 
     const start_result = c.ma_device_start(&e.device);
@@ -384,9 +420,10 @@ pub fn setMasterVolume(engine: ?*Engine, volume: f32) i32 {
 
 fn mixLocked(engine: *Engine, out: []f32, frame_count: u32, channels: u8, allow_audio: bool) bool {
     @memset(out, 0);
-    if (!allow_audio or frame_count == 0 or channels != 2) {
+    if (!allow_audio or frame_count == 0 or channels == 0) {
         engine.stats.last_peak = 0;
         engine.stats.last_rms = 0;
+        engine.stats.underruns = loadUnderruns(engine);
         return false;
     }
 
@@ -435,8 +472,20 @@ fn mixLocked(engine: *Engine, out: []f32, frame_count: u32, channels: u8, allow_
         const master = engine.master_volume;
         const out_l = clamp(dry_l * master, -1, 1);
         const out_r = clamp(dry_r * master, -1, 1);
-        out[frame * 2] = out_l;
-        out[frame * 2 + 1] = out_r;
+        const frame_base = frame * @as(usize, channels);
+
+        if (channels == 1) {
+            const out_mono = clamp((out_l + out_r) * 0.5, -1, 1);
+            out[frame_base] = out_mono;
+
+            const abs_mono = @abs(out_mono);
+            if (abs_mono > peak) peak = abs_mono;
+            rms_acc += @as(f64, out_mono) * @as(f64, out_mono);
+            continue;
+        }
+
+        out[frame_base] = out_l;
+        out[frame_base + 1] = out_r;
 
         const abs_l = @abs(out_l);
         const abs_r = @abs(out_r);
@@ -448,8 +497,9 @@ fn mixLocked(engine: *Engine, out: []f32, frame_count: u32, channels: u8, allow_
 
     engine.stats.frames_mixed += frame_count;
     engine.stats.last_peak = peak;
-    const sample_count = @as(f64, @floatFromInt(frame_count)) * 2;
+    const sample_count = @as(f64, @floatFromInt(frame_count)) * @as(f64, @floatFromInt(channels));
     engine.stats.last_rms = @floatCast(std.math.sqrt(rms_acc / @max(sample_count, 1)));
+    engine.stats.underruns = loadUnderruns(engine);
     engine.updateActiveVoiceCount();
     return true;
 }
@@ -457,20 +507,31 @@ fn mixLocked(engine: *Engine, out: []f32, frame_count: u32, channels: u8, allow_
 fn audioCallback(device_ptr: ?*c.ma_device, output_ptr: ?*anyopaque, input_ptr: ?*const anyopaque, frame_count: c.ma_uint32) callconv(.c) void {
     _ = input_ptr;
     if (device_ptr == null or output_ptr == null) return;
-    const user_data = device_ptr.?.pUserData orelse return;
-    const engine: *Engine = @ptrCast(@alignCast(user_data));
-
-    engine.lock.lock();
-    defer engine.lock.unlock();
+    const output_channels: u8 = @intCast(device_ptr.?.playback.channels);
 
     const aligned_output: *align(@alignOf(f32)) anyopaque = @alignCast(output_ptr.?);
-    const out = @as([*]f32, @ptrCast(aligned_output))[0 .. @as(usize, frame_count) * @as(usize, engine.output_channels)];
-    _ = mixLocked(engine, out, @intCast(frame_count), engine.output_channels, engine.started);
+    const out = @as([*]f32, @ptrCast(aligned_output))[0 .. @as(usize, frame_count) * @as(usize, output_channels)];
+
+    const user_data = device_ptr.?.pUserData orelse {
+        @memset(out, 0);
+        return;
+    };
+
+    const engine: *Engine = @ptrCast(@alignCast(user_data));
+
+    if (!engine.lock.tryLock()) {
+        @memset(out, 0);
+        incrementUnderruns(engine);
+        return;
+    }
+    defer engine.lock.unlock();
+
+    _ = mixLocked(engine, out, @intCast(frame_count), output_channels, engine.started);
 }
 
 pub fn mixToBuffer(engine: ?*Engine, out_ptr: ?[*]f32, frame_count: u32, channels: u8) i32 {
     if (engine == null or out_ptr == null) return Status.err_invalid;
-    if (channels != 2) return Status.err_invalid;
+    if (channels == 0) return Status.err_invalid;
 
     const e = engine.?;
     e.lock.lock();
@@ -485,6 +546,7 @@ pub fn getStats(engine: ?*Engine, out_stats: ?*Stats) i32 {
     const e = engine.?;
     e.lock.lock();
     defer e.lock.unlock();
+    e.stats.underruns = loadUnderruns(e);
     e.updateActiveVoiceCount();
     out_stats.?.* = e.stats;
     return Status.ok;
