@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { NativeAudio } from "../NativeAudio.js"
+import { Audio } from "../Audio.js"
 
 const SAMPLE_RATE = 48_000
 
@@ -36,7 +36,7 @@ function buildMonoPcm16Wav(samples: number[]): Uint8Array {
   return out
 }
 
-const instances: NativeAudio[] = []
+const instances: Audio[] = []
 
 afterEach(() => {
   for (const instance of instances.splice(0)) {
@@ -44,8 +44,8 @@ afterEach(() => {
   }
 })
 
-test("NativeAudio loads wav and mixes frames", () => {
-  const audio = NativeAudio.create({ autoStart: false })
+test("Audio loads wav and mixes frames", () => {
+  const audio = Audio.create({ autoStart: false })
   instances.push(audio)
 
   const wav = buildMonoPcm16Wav([0, 0.25, -0.25, 0.5, -0.5, 0])

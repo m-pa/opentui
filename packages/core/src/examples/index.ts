@@ -469,7 +469,7 @@ const examples: Example[] = [
     destroy: focusRestoreDemo.destroy,
   },
   {
-    name: "NativeAudio Demo",
+    name: "Audio Demo",
     description: "WAV-based native mixer with sound groups and live meter stats",
     run: nativeAudioDemo.run,
     destroy: nativeAudioDemo.destroy,

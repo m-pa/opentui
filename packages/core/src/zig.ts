@@ -1088,7 +1088,7 @@ function getOpenTUILib(libPath?: string) {
       returns: "void",
     },
 
-    // NativeAudio
+    // Audio
     createAudioEngine: {
       args: [],
       returns: "ptr",

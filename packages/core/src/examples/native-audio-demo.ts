@@ -3,10 +3,10 @@
 import {
   BoxRenderable,
   CliRenderer,
-  NativeAudio,
-  type NativeAudioGroup,
-  type NativeAudioSound,
-  type NativeAudioVoice,
+  Audio,
+  type AudioGroup,
+  type AudioSound,
+  type AudioVoice,
   TextRenderable,
   createCliRenderer,
   type KeyEvent,
@@ -40,11 +40,11 @@ let outputText: TextRenderable | null = null
 
 let keyHandler: ((event: KeyEvent) => void) | null = null
 
-let audio: NativeAudio | null = null
-let groups: { sfx: NativeAudioGroup; music: NativeAudioGroup; ui: NativeAudioGroup } | null = null
-let sounds: NativeAudioSound[] = []
-let musicSound: NativeAudioSound | null = null
-let musicVoice: NativeAudioVoice | null = null
+let audio: Audio | null = null
+let groups: { sfx: AudioGroup; music: AudioGroup; ui: AudioGroup } | null = null
+let sounds: AudioSound[] = []
+let musicSound: AudioSound | null = null
+let musicVoice: AudioVoice | null = null
 let masterVolume = 1
 
 let lastAction = "Ready"
@@ -134,7 +134,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
   renderer.setBackgroundColor("#111319")
   renderer.start()
 
-  audio = NativeAudio.create({ autoStart: true })
+  audio = Audio.create({ autoStart: true })
   groups = {
     sfx: audio.group("sfx"),
     music: audio.group("music"),
@@ -171,7 +171,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
 
   titleText = new TextRenderable(renderer, {
     id: "native-audio-demo-title",
-    content: "NativeAudio Demo - WAV mixer + sound groups",
+    content: "Audio Demo - WAV mixer + sound groups",
     fg: "#93C5FD",
     height: 1,
   })

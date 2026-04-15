@@ -2,7 +2,7 @@ import type { Pointer } from "bun:ffi"
 import { resolveRenderLib, type RenderLib } from "./zig.js"
 import type { AudioStats, AudioVoiceOptions } from "./zig-structs.js"
 
-interface NativeAudioBackend {
+interface AudioBackend {
   createAudioEngine: () => Pointer | null
   destroyAudioEngine: (engine: Pointer) => void
   audioStart: (engine: Pointer) => number
@@ -18,19 +18,19 @@ interface NativeAudioBackend {
   audioGetStats: (engine: Pointer) => AudioStats | null
 }
 
-export interface NativeAudioSetupOptions {
+export interface AudioSetupOptions {
   autoStart?: boolean
   allowMissingBackend?: boolean
 }
 
-export interface NativeAudioPlayOptions {
+export interface AudioPlayOptions {
   volume?: number
   pan?: number
   loop?: boolean
-  group?: NativeAudioGroup
+  group?: AudioGroup
 }
 
-export class NativeAudioGroup {
+export class AudioGroup {
   constructor(
     readonly name: string,
     private readonly setVolumeImpl: (volume: number) => void,
@@ -41,33 +41,33 @@ export class NativeAudioGroup {
   }
 }
 
-export class NativeAudioVoice {
+export class AudioVoice {
   constructor(
     private readonly stopImpl: () => void,
-    private readonly setGroupImpl: (group: NativeAudioGroup) => void,
+    private readonly setGroupImpl: (group: AudioGroup) => void,
   ) {}
 
   stop(): void {
     this.stopImpl()
   }
 
-  setGroup(group: NativeAudioGroup): void {
+  setGroup(group: AudioGroup): void {
     this.setGroupImpl(group)
   }
 }
 
-export class NativeAudioSound {
+export class AudioSound {
   constructor(
-    private readonly playImpl: (options?: NativeAudioPlayOptions) => NativeAudioVoice,
+    private readonly playImpl: (options?: AudioPlayOptions) => AudioVoice,
   ) {}
 
-  play(options?: NativeAudioPlayOptions): NativeAudioVoice {
+  play(options?: AudioPlayOptions): AudioVoice {
     return this.playImpl(options)
   }
 }
 
-function hasAudioBackend(lib: RenderLib): lib is RenderLib & NativeAudioBackend {
-  const maybe = lib as RenderLib & Partial<NativeAudioBackend>
+function hasAudioBackend(lib: RenderLib): lib is RenderLib & AudioBackend {
+  const maybe = lib as RenderLib & Partial<AudioBackend>
   return (
     typeof maybe.createAudioEngine === "function" &&
     typeof maybe.destroyAudioEngine === "function" &&
@@ -86,33 +86,31 @@ function hasAudioBackend(lib: RenderLib): lib is RenderLib & NativeAudioBackend 
 }
 
 function statusToError(action: string, status: number): Error {
-  return new Error(`NativeAudio ${action} failed: ${status}`)
+  return new Error(`Audio ${action} failed: ${status}`)
 }
 
 function toBytes(data: Uint8Array | ArrayBuffer): Uint8Array {
   return data instanceof Uint8Array ? data : new Uint8Array(data)
 }
 
-export class NativeAudio {
-  static create(options: NativeAudioSetupOptions = {}): NativeAudio {
-    return new NativeAudio(resolveRenderLib(), options)
+export class Audio {
+  static create(options: AudioSetupOptions = {}): Audio {
+    return new Audio(resolveRenderLib(), options)
   }
 
   readonly available: boolean
-  private readonly lib: (RenderLib & NativeAudioBackend) | null
+  private readonly lib: (RenderLib & AudioBackend) | null
   private engine: Pointer | null = null
-  private readonly groups = new Map<string, NativeAudioGroup>()
-  private groupIds = new WeakMap<NativeAudioGroup, number>()
+  private readonly groups = new Map<string, AudioGroup>()
+  private groupIds = new WeakMap<AudioGroup, number>()
   private started = false
 
-  private constructor(lib: RenderLib, options: NativeAudioSetupOptions) {
+  private constructor(lib: RenderLib, options: AudioSetupOptions) {
     const allowMissingBackend = options.allowMissingBackend ?? false
 
     if (!hasAudioBackend(lib)) {
       if (!allowMissingBackend) {
-        throw new Error(
-          "NativeAudio backend missing. Rebuild native core with audio exports or set allowMissingBackend=true.",
-        )
+        throw new Error("Audio backend missing. Rebuild native core with audio exports or set allowMissingBackend=true.")
       }
       this.available = false
       this.lib = null
@@ -123,7 +121,7 @@ export class NativeAudio {
     this.lib = lib
     this.engine = lib.createAudioEngine()
     if (!this.engine) {
-      throw new Error("NativeAudio createAudioEngine returned null")
+      throw new Error("Audio createAudioEngine returned null")
     }
 
     if (options.autoStart ?? true) {
@@ -153,9 +151,9 @@ export class NativeAudio {
     return this.started
   }
 
-  loadSound(data: Uint8Array | ArrayBuffer): NativeAudioSound {
+  loadSound(data: Uint8Array | ArrayBuffer): AudioSound {
     if (!this.available || !this.lib || !this.engine) {
-      throw new Error("NativeAudio backend unavailable")
+      throw new Error("Audio backend unavailable")
     }
 
     const result = this.lib.audioLoadWav(this.engine, toBytes(data))
@@ -164,25 +162,25 @@ export class NativeAudio {
     }
 
     const soundId = result.soundId
-    return new NativeAudioSound((options) => this.playSound(soundId, options))
+    return new AudioSound((options) => this.playSound(soundId, options))
   }
 
-  loadWav(data: Uint8Array | ArrayBuffer): NativeAudioSound {
+  loadWav(data: Uint8Array | ArrayBuffer): AudioSound {
     return this.loadSound(data)
   }
 
-  async loadSoundFile(filePath: string): Promise<NativeAudioSound> {
+  async loadSoundFile(filePath: string): Promise<AudioSound> {
     const bytes = await Bun.file(filePath).arrayBuffer()
     return this.loadSound(bytes)
   }
 
-  async loadWavFile(filePath: string): Promise<NativeAudioSound> {
+  async loadWavFile(filePath: string): Promise<AudioSound> {
     return this.loadSoundFile(filePath)
   }
 
-  group(name: string): NativeAudioGroup {
+  group(name: string): AudioGroup {
     if (!this.available || !this.lib || !this.engine) {
-      throw new Error("NativeAudio backend unavailable")
+      throw new Error("Audio backend unavailable")
     }
 
     const existing = this.groups.get(name)
@@ -196,7 +194,7 @@ export class NativeAudio {
     }
 
     const groupId = result.groupId
-    const group = new NativeAudioGroup(name, (volume) => {
+    const group = new AudioGroup(name, (volume) => {
       this.setGroupVolume(groupId, volume)
     })
 
@@ -215,7 +213,7 @@ export class NativeAudio {
 
   mixFrames(frameCount: number, channels: number = 2): Float32Array {
     if (!this.available || !this.lib || !this.engine) {
-      throw new Error("NativeAudio backend unavailable")
+      throw new Error("Audio backend unavailable")
     }
     const output = new Float32Array(frameCount * channels)
     const status = this.lib.audioMixToBuffer(this.engine, output, frameCount, channels)
@@ -241,9 +239,9 @@ export class NativeAudio {
     this.engine = null
   }
 
-  private playSound(soundId: number, options?: NativeAudioPlayOptions): NativeAudioVoice {
+  private playSound(soundId: number, options?: AudioPlayOptions): AudioVoice {
     if (!this.available || !this.lib || !this.engine) {
-      throw new Error("NativeAudio backend unavailable")
+      throw new Error("Audio backend unavailable")
     }
 
     const groupId = options?.group ? this.getGroupId(options.group) : 0
@@ -262,7 +260,7 @@ export class NativeAudio {
     }
 
     const voiceId = result.voiceId
-    return new NativeAudioVoice(
+    return new AudioVoice(
       () => this.stopVoice(voiceId),
       (group) => this.setVoiceGroup(voiceId, group),
     )
@@ -276,7 +274,7 @@ export class NativeAudio {
     }
   }
 
-  private setVoiceGroup(voiceId: number, group: NativeAudioGroup): void {
+  private setVoiceGroup(voiceId: number, group: AudioGroup): void {
     if (!this.available || !this.lib || !this.engine) return
     const status = this.lib.audioSetVoiceGroup(this.engine, voiceId, this.getGroupId(group))
     if (status !== 0) {
@@ -292,15 +290,15 @@ export class NativeAudio {
     }
   }
 
-  private getGroupId(group: NativeAudioGroup): number {
+  private getGroupId(group: AudioGroup): number {
     const groupId = this.groupIds.get(group)
     if (groupId == null) {
-      throw new Error("NativeAudio group does not belong to this audio engine")
+      throw new Error("Audio group does not belong to this audio engine")
     }
     return groupId
   }
 }
 
-export function setupNativeAudio(options: NativeAudioSetupOptions = {}): NativeAudio {
-  return NativeAudio.create(options)
+export function setupAudio(options: AudioSetupOptions = {}): Audio {
+  return Audio.create(options)
 }
