@@ -22,6 +22,8 @@ type SoundPreset = {
   decay: number
 }
 
+type MixTarget = "effects" | "master" | "bgm"
+
 const PRESETS: SoundPreset[] = [
   { name: "Jump", frequency: 540, durationMs: 120, volume: 0.8, groupName: "sfx", decay: 0.82 },
   { name: "Coin", frequency: 980, durationMs: 90, volume: 0.65, groupName: "ui", decay: 0.86 },
@@ -29,10 +31,16 @@ const PRESETS: SoundPreset[] = [
 ]
 
 const SAMPLE_RATE = 48_000
+const MIX_TARGETS: MixTarget[] = ["effects", "master", "bgm"]
+const VOLUME_STEP = 0.05
+const PAN_STEP = 0.1
+const MIN_VOLUME = 0
+const MAX_VOLUME = 2
 
 let root: BoxRenderable | null = null
 let titleText: TextRenderable | null = null
 let statusText: TextRenderable | null = null
+let mixText: TextRenderable | null = null
 let statsText: TextRenderable | null = null
 let meterText: TextRenderable | null = null
 let controlsText: TextRenderable | null = null
@@ -46,6 +54,12 @@ let sounds: AudioSound[] = []
 let musicSound: AudioSound | null = null
 let musicVoice: AudioVoice | null = null
 let masterVolume = 1
+let masterPan = 0
+let effectsVolume = 1
+let effectsPan = 0
+let bgmVolume = 0.42
+let bgmPan = 0
+let selectedMixTargetIndex = 0
 
 let lastAction = "Ready"
 
@@ -83,6 +97,125 @@ function buildMonoPcm16Wav(options: { frequency: number; durationMs: number; amp
   return out
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
+}
+
+function clampVolume(value: number): number {
+  return clamp(value, MIN_VOLUME, MAX_VOLUME)
+}
+
+function clampPan(value: number): number {
+  return clamp(value, -1, 1)
+}
+
+function selectedMixTarget(): MixTarget {
+  return MIX_TARGETS[selectedMixTargetIndex] ?? "effects"
+}
+
+function mixTargetLabel(target: MixTarget): string {
+  switch (target) {
+    case "effects":
+      return "Effects"
+    case "master":
+      return "Master"
+    case "bgm":
+      return "BGM"
+  }
+}
+
+function formatSigned(value: number): string {
+  const normalized = Math.abs(value) < 0.005 ? 0 : value
+  return normalized >= 0 ? `+${normalized.toFixed(2)}` : normalized.toFixed(2)
+}
+
+function formatMixTarget(target: MixTarget, volume: number, pan: number): string {
+  const marker = selectedMixTarget() === target ? ">" : " "
+  return `${marker}${mixTargetLabel(target)} v${volume.toFixed(2)} p${formatSigned(pan)}`
+}
+
+function presetBasePan(index: number): number {
+  return index === 0 ? -0.2 : index === 1 ? 0.2 : 0
+}
+
+function applyGroupVolumes(): void {
+  if (!groups) return
+  groups.sfx.setVolume(effectsVolume)
+  groups.ui.setVolume(clampVolume(effectsVolume * 0.9))
+  groups.music.setVolume(bgmVolume)
+}
+
+function playBgmVoice(): void {
+  if (!musicSound || !groups) return
+  musicVoice = musicSound.play({
+    volume: 1,
+    pan: clampPan(bgmPan + masterPan),
+    loop: true,
+    group: groups.music,
+  })
+}
+
+function restartBgmVoiceIfPlaying(): void {
+  if (!musicVoice) return
+  musicVoice.stop()
+  musicVoice = null
+  playBgmVoice()
+}
+
+function selectMixTarget(step: number): void {
+  selectedMixTargetIndex = (selectedMixTargetIndex + step + MIX_TARGETS.length) % MIX_TARGETS.length
+  lastAction = `Selected ${mixTargetLabel(selectedMixTarget())}`
+  updateHeader()
+}
+
+function adjustSelectedVolume(delta: number): void {
+  if (!audio) return
+  const target = selectedMixTarget()
+
+  switch (target) {
+    case "effects":
+      effectsVolume = clampVolume(effectsVolume + delta)
+      applyGroupVolumes()
+      lastAction = `Effects volume ${effectsVolume.toFixed(2)}`
+      break
+    case "master":
+      masterVolume = clampVolume(masterVolume + delta)
+      audio.setMasterVolume(masterVolume)
+      lastAction = `Master volume ${masterVolume.toFixed(2)}`
+      break
+    case "bgm":
+      bgmVolume = clampVolume(bgmVolume + delta)
+      applyGroupVolumes()
+      lastAction = `BGM volume ${bgmVolume.toFixed(2)}`
+      break
+  }
+
+  updateHeader()
+}
+
+function adjustSelectedPan(delta: number): void {
+  const target = selectedMixTarget()
+
+  switch (target) {
+    case "effects":
+      effectsPan = clampPan(effectsPan + delta)
+      lastAction = `Effects pan ${formatSigned(effectsPan)}`
+      break
+    case "master":
+      masterPan = clampPan(masterPan + delta)
+      restartBgmVoiceIfPlaying()
+      lastAction = `Master pan ${formatSigned(masterPan)}`
+      break
+    case "bgm":
+      bgmPan = clampPan(bgmPan + delta)
+      restartBgmVoiceIfPlaying()
+      lastAction = `BGM pan ${formatSigned(bgmPan)}`
+      break
+  }
+
+  updateHeader()
+}
+
 function meterBar(value: number, width = 28): string {
   const clamped = Math.max(0, Math.min(1, value))
   const filled = Math.floor(clamped * width)
@@ -92,6 +225,15 @@ function meterBar(value: number, width = 28): string {
 function updateHeader(): void {
   if (!statusText) return
   statusText.content = `Action: ${lastAction}`
+
+  if (mixText) {
+    const items = [
+      formatMixTarget("effects", effectsVolume, effectsPan),
+      formatMixTarget("master", masterVolume, masterPan),
+      formatMixTarget("bgm", bgmVolume, bgmPan),
+    ]
+    mixText.content = `Select j/k item | h/l volume | H/L pan\n${items.join("  ")}`
+  }
 
   if (outputText && audio) {
     outputText.content = `Output: ${audio.isStarted() ? "ON (miniaudio)" : "OFF"}`
@@ -103,7 +245,7 @@ function triggerSound(index: number): void {
   const preset = PRESETS[index]
   sounds[index].play({
     volume: preset.volume,
-    pan: index === 0 ? -0.2 : index === 1 ? 0.2 : 0,
+    pan: clampPan(presetBasePan(index) + effectsPan + masterPan),
     loop: false,
     group: groups[preset.groupName],
   })
@@ -140,11 +282,17 @@ export async function run(renderer: CliRenderer): Promise<void> {
     music: audio.group("music"),
     ui: audio.group("ui"),
   }
+
   masterVolume = 1
+  masterPan = 0
+  effectsVolume = 1
+  effectsPan = 0
+  bgmVolume = 0.42
+  bgmPan = 0
+  selectedMixTargetIndex = 0
+
   audio.setMasterVolume(masterVolume)
-  groups.sfx.setVolume(1)
-  groups.ui.setVolume(0.9)
-  groups.music.setVolume(0.42)
+  applyGroupVolumes()
 
   sounds = PRESETS.map((preset) => {
     const wav = buildMonoPcm16Wav({
@@ -171,7 +319,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
 
   titleText = new TextRenderable(renderer, {
     id: "native-audio-demo-title",
-    content: "Audio Demo - WAV mixer + sound groups",
+    content: "Audio Demo - selectable mix controls",
     fg: "#93C5FD",
     height: 1,
   })
@@ -184,6 +332,15 @@ export async function run(renderer: CliRenderer): Promise<void> {
     height: 1,
   })
   root.add(statusText)
+
+  mixText = new TextRenderable(renderer, {
+    id: "native-audio-demo-mix",
+    content: "Select j/k item | h/l volume | H/L pan",
+    fg: "#67E8F9",
+    height: 2,
+    marginTop: 1,
+  })
+  root.add(mixText)
 
   meterText = new TextRenderable(renderer, {
     id: "native-audio-demo-meter",
@@ -215,9 +372,9 @@ export async function run(renderer: CliRenderer): Promise<void> {
   controlsText = new TextRenderable(renderer, {
     id: "native-audio-demo-controls",
     content:
-      "1 Jump 2 Coin 3 Thud B bgm | M/N master | group() demo | Esc back",
+      "1/2/3 trigger effects | B bgm on/off | J/K select item | H/L vol | Shift+H/Shift+L pan | Esc back",
     fg: "#9CA3AF",
-    height: 2,
+    height: 3,
     marginTop: 1,
   })
   root.add(controlsText)
@@ -225,12 +382,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
   updateHeader()
 
   if (musicSound && groups) {
-    musicVoice = musicSound.play({
-      volume: 0.42,
-      pan: 0,
-      loop: true,
-      group: groups.music,
-    })
+    playBgmVoice()
     lastAction = "BGM auto start"
     updateHeader()
   }
@@ -249,6 +401,22 @@ export async function run(renderer: CliRenderer): Promise<void> {
       case "3":
         triggerSound(2)
         break
+      case "j":
+        selectMixTarget(1)
+        break
+      case "k":
+        selectMixTarget(-1)
+        break
+      case "h":
+      case "l": {
+        const delta = event.name === "h" ? -1 : 1
+        if (event.shift) {
+          adjustSelectedPan(delta * PAN_STEP)
+        } else {
+          adjustSelectedVolume(delta * VOLUME_STEP)
+        }
+        break
+      }
       case "b":
         if (!musicSound) break
         if (musicVoice) {
@@ -256,27 +424,11 @@ export async function run(renderer: CliRenderer): Promise<void> {
           musicVoice = null
           lastAction = "BGM stop"
         } else {
-          if (!groups) break
-          musicVoice = musicSound.play({
-            volume: 0.5,
-            pan: 0,
-            loop: true,
-            group: groups.music,
-          })
+          playBgmVoice()
           lastAction = "BGM start"
         }
         updateHeader()
         break
-      case "m":
-      case "n": {
-        const stats = audio.getStats()
-        const delta = event.name === "m" ? -0.1 : 0.1
-        masterVolume = Math.max(0, Math.min(2, masterVolume + delta))
-        audio.setMasterVolume(masterVolume)
-        lastAction = `Master ${masterVolume.toFixed(2)} voices=${stats?.voicesActive ?? 0}`
-        updateHeader()
-        break
-      }
     }
   }
 
@@ -299,6 +451,7 @@ export function destroy(renderer: CliRenderer): void {
   root = null
   titleText = null
   statusText = null
+  mixText = null
   statsText = null
   outputText = null
   meterText = null
@@ -311,6 +464,12 @@ export function destroy(renderer: CliRenderer): void {
   musicSound = null
   musicVoice = null
   masterVolume = 1
+  masterPan = 0
+  effectsVolume = 1
+  effectsPan = 0
+  bgmVolume = 0.42
+  bgmPan = 0
+  selectedMixTargetIndex = 0
   lastAction = "Ready"
 }
 
