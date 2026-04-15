@@ -1105,7 +1105,7 @@ function getOpenTUILib(libPath?: string) {
       args: ["ptr"],
       returns: "i32",
     },
-    audioLoadWav: {
+    audioLoad: {
       args: ["ptr", "ptr", "u64", "ptr"],
       returns: "i32",
     },
@@ -1884,7 +1884,7 @@ export interface RenderLib {
   destroyAudioEngine: (engine: Pointer) => void
   audioStart: (engine: Pointer) => number
   audioStop: (engine: Pointer) => number
-  audioLoadWav: (engine: Pointer, data: Uint8Array) => { status: number; soundId: number | null }
+  audioLoad: (engine: Pointer, data: Uint8Array) => { status: number; soundId: number | null }
   audioPlay: (engine: Pointer, soundId: number, options?: AudioVoiceOptions) => { status: number; voiceId: number | null }
   audioStopVoice: (engine: Pointer, voiceId: number) => number
   audioSetVoiceGroup: (engine: Pointer, voiceId: number, groupId: number) => number
@@ -3788,9 +3788,9 @@ class FFIRenderLib implements RenderLib {
     return this.opentui.symbols.audioStop(engine)
   }
 
-  public audioLoadWav(engine: Pointer, data: Uint8Array): { status: number; soundId: number | null } {
+  public audioLoad(engine: Pointer, data: Uint8Array): { status: number; soundId: number | null } {
     const outBuffer = new ArrayBuffer(4)
-    const status = this.opentui.symbols.audioLoadWav(engine, ptr(data), data.length, ptr(outBuffer))
+    const status = this.opentui.symbols.audioLoad(engine, ptr(data), data.length, ptr(outBuffer))
     if (status !== 0) {
       return { status, soundId: null }
     }

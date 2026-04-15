@@ -7,7 +7,7 @@ interface AudioBackend {
   destroyAudioEngine: (engine: Pointer) => void
   audioStart: (engine: Pointer) => number
   audioStop: (engine: Pointer) => number
-  audioLoadWav: (engine: Pointer, data: Uint8Array) => { status: number; soundId: number | null }
+  audioLoad: (engine: Pointer, data: Uint8Array) => { status: number; soundId: number | null }
   audioPlay: (engine: Pointer, soundId: number, options?: AudioVoiceOptions) => { status: number; voiceId: number | null }
   audioStopVoice: (engine: Pointer, voiceId: number) => number
   audioSetVoiceGroup: (engine: Pointer, voiceId: number, groupId: number) => number
@@ -73,7 +73,7 @@ function hasAudioBackend(lib: RenderLib): lib is RenderLib & AudioBackend {
     typeof maybe.destroyAudioEngine === "function" &&
     typeof maybe.audioStart === "function" &&
     typeof maybe.audioStop === "function" &&
-    typeof maybe.audioLoadWav === "function" &&
+    typeof maybe.audioLoad === "function" &&
     typeof maybe.audioPlay === "function" &&
     typeof maybe.audioStopVoice === "function" &&
     typeof maybe.audioSetVoiceGroup === "function" &&
@@ -156,7 +156,7 @@ export class Audio {
       throw new Error("Audio backend unavailable")
     }
 
-    const result = this.lib.audioLoadWav(this.engine, toBytes(data))
+    const result = this.lib.audioLoad(this.engine, toBytes(data))
     if (result.status !== 0 || result.soundId == null) {
       throw statusToError("loadSound", result.status)
     }

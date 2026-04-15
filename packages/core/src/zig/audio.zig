@@ -254,11 +254,11 @@ pub fn stop(engine: ?*Engine) i32 {
     return Status.ok;
 }
 
-pub fn loadWav(engine: ?*Engine, data_ptr: ?[*]const u8, data_len: usize, out_sound_id: ?*u32) i32 {
+pub fn load(engine: ?*Engine, data_ptr: ?[*]const u8, data_len: usize, out_sound_id: ?*u32) i32 {
     if (engine == null or data_ptr == null or out_sound_id == null or data_len == 0) return Status.err_invalid;
     const e = engine.?;
-    const wav = @as([*]const u8, @ptrCast(data_ptr.?))[0..data_len];
-    const sound = decodeSoundFromMemory(e.allocator, wav) catch return Status.err_decode;
+    const encoded_audio = @as([*]const u8, @ptrCast(data_ptr.?))[0..data_len];
+    const sound = decodeSoundFromMemory(e.allocator, encoded_audio) catch return Status.err_decode;
     e.lock.lock();
     defer e.lock.unlock();
     e.sounds.append(e.allocator, sound) catch {

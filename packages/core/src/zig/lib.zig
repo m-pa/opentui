@@ -177,8 +177,8 @@ export fn audioStop(engine: ?*native_audio.Engine) i32 {
     return native_audio.stop(engine);
 }
 
-export fn audioLoadWav(engine: ?*native_audio.Engine, data_ptr: ?[*]const u8, data_len: usize, out_sound_id: ?*u32) i32 {
-    return native_audio.loadWav(engine, data_ptr, data_len, out_sound_id);
+export fn audioLoad(engine: ?*native_audio.Engine, data_ptr: ?[*]const u8, data_len: usize, out_sound_id: ?*u32) i32 {
+    return native_audio.load(engine, data_ptr, data_len, out_sound_id);
 }
 
 export fn audioPlay(engine: ?*native_audio.Engine, sound_id: u32, options_ptr: ?*const native_audio.VoiceOptions, out_voice_id: ?*u32) i32 {
