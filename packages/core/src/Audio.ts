@@ -33,36 +33,36 @@ export interface AudioPlayOptions {
 export class AudioGroup {
   constructor(
     readonly name: string,
-    private readonly setVolumeImpl: (volume: number) => void,
+    private readonly _setVolume: (volume: number) => void,
   ) {}
 
   setVolume(volume: number): void {
-    this.setVolumeImpl(volume)
+    this._setVolume(volume)
   }
 }
 
 export class AudioVoice {
   constructor(
-    private readonly stopImpl: () => void,
-    private readonly setGroupImpl: (group: AudioGroup) => void,
+    private readonly _stop: () => void,
+    private readonly _setGroup: (group: AudioGroup) => void,
   ) {}
 
   stop(): void {
-    this.stopImpl()
+    this._stop()
   }
 
   setGroup(group: AudioGroup): void {
-    this.setGroupImpl(group)
+    this._setGroup(group)
   }
 }
 
 export class AudioSound {
   constructor(
-    private readonly playImpl: (options?: AudioPlayOptions) => AudioVoice,
+    private readonly _play: (options?: AudioPlayOptions) => AudioVoice,
   ) {}
 
   play(options?: AudioPlayOptions): AudioVoice {
-    return this.playImpl(options)
+    return this._play(options)
   }
 }
 
@@ -165,17 +165,9 @@ export class Audio {
     return new AudioSound((options) => this.playSound(soundId, options))
   }
 
-  loadWav(data: Uint8Array | ArrayBuffer): AudioSound {
-    return this.loadSound(data)
-  }
-
   async loadSoundFile(filePath: string): Promise<AudioSound> {
     const bytes = await Bun.file(filePath).arrayBuffer()
     return this.loadSound(bytes)
-  }
-
-  async loadWavFile(filePath: string): Promise<AudioSound> {
-    return this.loadSoundFile(filePath)
   }
 
   group(name: string): AudioGroup {
