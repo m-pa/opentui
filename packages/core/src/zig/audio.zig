@@ -112,95 +112,82 @@ fn clamp(value: f32, min: f32, max: f32) f32 {
     return @max(min, @min(max, value));
 }
 
-fn readU16LE(bytes: []const u8) u16 {
-    return @as(u16, bytes[0]) | (@as(u16, bytes[1]) << 8);
+fn decoderAsDataSource(decoder: *c.ma_decoder) *c.ma_data_source {
+    return @ptrCast(decoder);
 }
 
-fn readU32LE(bytes: []const u8) u32 {
-    return @as(u32, bytes[0]) |
-        (@as(u32, bytes[1]) << 8) |
-        (@as(u32, bytes[2]) << 16) |
-        (@as(u32, bytes[3]) << 24);
+fn decodeSoundKnownLength(allocator: std.mem.Allocator, data_source: *c.ma_data_source, frame_count: c.ma_uint64) !Sound {
+    const channels: usize = 2;
+    const frame_count_usize = std.math.cast(usize, frame_count) orelse return error.OutOfMemory;
+    const sample_count = try std.math.mul(usize, frame_count_usize, channels);
+
+    const seek_result = c.ma_data_source_seek_to_pcm_frame(data_source, 0);
+    if (seek_result != c.MA_SUCCESS) return error.DecodeFailed;
+
+    var samples = try allocator.alloc(f32, sample_count);
+    errdefer allocator.free(samples);
+
+    var frames_read: c.ma_uint64 = 0;
+    const result = c.ma_data_source_read_pcm_frames(data_source, samples.ptr, frame_count, &frames_read);
+    if (result != c.MA_SUCCESS and result != c.MA_AT_END) return error.DecodeFailed;
+
+    const frames_read_usize = std.math.cast(usize, frames_read) orelse return error.OutOfMemory;
+    const final_sample_count = try std.math.mul(usize, frames_read_usize, channels);
+    if (final_sample_count != sample_count) {
+        samples = try allocator.realloc(samples, final_sample_count);
+    }
+
+    return .{
+        .channels = @intCast(channels),
+        .sample_rate = 48_000,
+        .samples = samples,
+    };
 }
 
-fn parseWav(allocator: std.mem.Allocator, bytes: []const u8) !Sound {
-    if (bytes.len < 12) return error.InvalidFormat;
-    if (!std.mem.eql(u8, bytes[0..4], "RIFF")) return error.InvalidFormat;
-    if (!std.mem.eql(u8, bytes[8..12], "WAVE")) return error.InvalidFormat;
+fn decodeSoundUnknownLength(allocator: std.mem.Allocator, data_source: *c.ma_data_source) !Sound {
+    const channels: usize = 2;
+    const chunk_frames: c.ma_uint64 = 4096;
+    var chunk: [4096 * channels]f32 = undefined;
+    var samples = std.ArrayList(f32).empty;
+    errdefer samples.deinit(allocator);
 
-    var cursor: usize = 12;
-    var fmt_found = false;
-    var data_found = false;
+    while (true) {
+        var frames_read: c.ma_uint64 = 0;
+        const result = c.ma_data_source_read_pcm_frames(data_source, chunk[0..].ptr, chunk_frames, &frames_read);
+        if (result != c.MA_SUCCESS and result != c.MA_AT_END) return error.DecodeFailed;
 
-    var audio_format: u16 = 0;
-    var channels: u16 = 0;
-    var sample_rate: u32 = 0;
-    var bits_per_sample: u16 = 0;
-    var data_chunk: []const u8 = &[_]u8{};
-
-    while (cursor + 8 <= bytes.len) {
-        const chunk_id = bytes[cursor .. cursor + 4];
-        const chunk_size = readU32LE(bytes[cursor + 4 .. cursor + 8]);
-        cursor += 8;
-
-        if (cursor + chunk_size > bytes.len) return error.InvalidFormat;
-        const chunk = bytes[cursor .. cursor + chunk_size];
-
-        if (std.mem.eql(u8, chunk_id, "fmt ")) {
-            if (chunk.len < 16) return error.InvalidFormat;
-            audio_format = readU16LE(chunk[0..2]);
-            channels = readU16LE(chunk[2..4]);
-            sample_rate = readU32LE(chunk[4..8]);
-            bits_per_sample = readU16LE(chunk[14..16]);
-            fmt_found = true;
-        } else if (std.mem.eql(u8, chunk_id, "data")) {
-            data_chunk = chunk;
-            data_found = true;
+        const frames_read_usize = std.math.cast(usize, frames_read) orelse return error.OutOfMemory;
+        const sample_count = try std.math.mul(usize, frames_read_usize, channels);
+        if (sample_count > 0) {
+            try samples.appendSlice(allocator, chunk[0..sample_count]);
         }
 
-        cursor += chunk_size;
-        if ((chunk_size & 1) == 1 and cursor < bytes.len) {
-            cursor += 1;
-        }
+        if (result == c.MA_AT_END or frames_read == 0) break;
     }
 
-    if (!fmt_found or !data_found) return error.InvalidFormat;
-    if (!(channels == 1 or channels == 2)) return error.UnsupportedFormat;
+    return .{
+        .channels = @intCast(channels),
+        .sample_rate = 48_000,
+        .samples = try samples.toOwnedSlice(allocator),
+    };
+}
 
-    if (audio_format == 1 and bits_per_sample == 16) {
-        if ((data_chunk.len % 2) != 0) return error.InvalidFormat;
-        const sample_count = data_chunk.len / 2;
-        var samples = try allocator.alloc(f32, sample_count);
-        for (0..sample_count) |i| {
-            const base = i * 2;
-            const pcm_bits = readU16LE(data_chunk[base .. base + 2]);
-            const pcm = @as(i16, @bitCast(pcm_bits));
-            samples[i] = @as(f32, @floatFromInt(pcm)) / 32768.0;
-        }
-        return .{
-            .channels = channels,
-            .sample_rate = sample_rate,
-            .samples = samples,
-        };
+fn decodeSoundFromMemory(allocator: std.mem.Allocator, bytes: []const u8) !Sound {
+    var config = c.ma_decoder_config_init(c.ma_format_f32, 2, 48_000);
+    var decoder: c.ma_decoder = undefined;
+    const init_result = c.ma_decoder_init_memory(bytes.ptr, bytes.len, &config, &decoder);
+    if (init_result != c.MA_SUCCESS) return error.DecodeFailed;
+    defer _ = c.ma_decoder_uninit(&decoder);
+
+    const data_source = decoderAsDataSource(&decoder);
+    var frame_count: c.ma_uint64 = 0;
+    const length_result = c.ma_data_source_get_length_in_pcm_frames(data_source, &frame_count);
+
+    if (length_result == c.MA_SUCCESS) {
+        return decodeSoundKnownLength(allocator, data_source, frame_count);
     }
 
-    if (audio_format == 3 and bits_per_sample == 32) {
-        if ((data_chunk.len % 4) != 0) return error.InvalidFormat;
-        const sample_count = data_chunk.len / 4;
-        var samples = try allocator.alloc(f32, sample_count);
-        for (0..sample_count) |i| {
-            const base = i * 4;
-            const bits = readU32LE(data_chunk[base .. base + 4]);
-            samples[i] = @as(f32, @bitCast(bits));
-        }
-        return .{
-            .channels = channels,
-            .sample_rate = sample_rate,
-            .samples = samples,
-        };
-    }
-
-    return error.UnsupportedFormat;
+    return decodeSoundUnknownLength(allocator, data_source);
 }
 
 pub fn create(allocator: std.mem.Allocator) ?*Engine {
@@ -258,7 +245,7 @@ pub fn loadWav(engine: ?*Engine, data_ptr: ?[*]const u8, data_len: usize, out_so
     if (engine == null or data_ptr == null or out_sound_id == null or data_len == 0) return Status.err_invalid;
     const e = engine.?;
     const wav = @as([*]const u8, @ptrCast(data_ptr.?))[0..data_len];
-    const sound = parseWav(e.allocator, wav) catch return Status.err_decode;
+    const sound = decodeSoundFromMemory(e.allocator, wav) catch return Status.err_decode;
     e.lock.lock();
     defer e.lock.unlock();
     e.sounds.append(e.allocator, sound) catch {

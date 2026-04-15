@@ -52,7 +52,7 @@ test("NativeAudio loads wav and mixes frames", () => {
   const soundId = audio.loadWav(wav)
 
   audio.start()
-  audio.play(soundId, { bus: "sfx", volume: 1, pan: 0, looped: false, send: 0.2 })
+  audio.play(soundId, { bus: "sfx", volume: 1, pan: 0, looped: false })
   const mixed = audio.mixFrames(6, 2)
 
   expect(mixed.length).toBe(12)

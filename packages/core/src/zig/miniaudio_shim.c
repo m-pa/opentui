@@ -1,5 +1,4 @@
 #define MINIAUDIO_IMPLEMENTATION
-#define MA_NO_DECODING
 
 #if defined(__linux__)
 #define MA_ENABLE_ALSA
