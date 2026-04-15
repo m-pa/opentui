@@ -263,7 +263,7 @@ export const ReserveInfoStruct = defineStruct(
 export type AudioVoiceOptions = {
   volume?: number
   pan?: number
-  looped?: boolean
+  loop?: boolean
   groupId?: number
 }
 
@@ -279,7 +279,7 @@ export type AudioStats = {
 export const AudioVoiceOptionsStruct = defineStruct([
   ["volume", "f32", { default: 1 }],
   ["pan", "f32", { default: 0 }],
-  ["looped", "bool_u8", { default: false }],
+  ["loop", "bool_u8", { default: false }],
   ["groupId", "u32", { default: 0 }],
 ])
 

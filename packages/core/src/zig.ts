@@ -1117,6 +1117,10 @@ function getOpenTUILib(libPath?: string) {
       args: ["ptr", "u32"],
       returns: "i32",
     },
+    audioSetVoiceGroup: {
+      args: ["ptr", "u32", "u32"],
+      returns: "i32",
+    },
     audioCreateGroup: {
       args: ["ptr", "ptr", "u64", "ptr"],
       returns: "i32",
@@ -1883,6 +1887,7 @@ export interface RenderLib {
   audioLoadWav: (engine: Pointer, data: Uint8Array) => { status: number; soundId: number | null }
   audioPlay: (engine: Pointer, soundId: number, options?: AudioVoiceOptions) => { status: number; voiceId: number | null }
   audioStopVoice: (engine: Pointer, voiceId: number) => number
+  audioSetVoiceGroup: (engine: Pointer, voiceId: number, groupId: number) => number
   audioCreateGroup: (engine: Pointer, name: string) => { status: number; groupId: number | null }
   audioSetGroupVolume: (engine: Pointer, groupId: number, volume: number) => number
   audioSetMasterVolume: (engine: Pointer, volume: number) => number
@@ -3806,6 +3811,10 @@ class FFIRenderLib implements RenderLib {
 
   public audioStopVoice(engine: Pointer, voiceId: number): number {
     return this.opentui.symbols.audioStopVoice(engine, voiceId)
+  }
+
+  public audioSetVoiceGroup(engine: Pointer, voiceId: number, groupId: number): number {
+    return this.opentui.symbols.audioSetVoiceGroup(engine, voiceId, groupId)
   }
 
   public audioCreateGroup(engine: Pointer, name: string): { status: number; groupId: number | null } {

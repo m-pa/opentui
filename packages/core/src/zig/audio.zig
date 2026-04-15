@@ -17,7 +17,7 @@ pub const max_voices: usize = 32;
 pub const VoiceOptions = extern struct {
     volume: f32,
     pan: f32,
-    looped: bool,
+    loop: bool,
     group_id: u32,
 };
 
@@ -42,7 +42,7 @@ const Voice = struct {
     frame_pos: usize = 0,
     volume: f32 = 1,
     pan: f32 = 0,
-    looped: bool = false,
+    loop: bool = false,
     group_id: u32 = 0,
 };
 
@@ -307,7 +307,7 @@ pub fn play(engine: ?*Engine, sound_id: u32, options_ptr: ?*const VoiceOptions, 
     const options = if (options_ptr) |opts| opts.* else VoiceOptions{
         .volume = 1,
         .pan = 0,
-        .looped = false,
+        .loop = false,
         .group_id = 0,
     };
 
@@ -322,7 +322,7 @@ pub fn play(engine: ?*Engine, sound_id: u32, options_ptr: ?*const VoiceOptions, 
                 .frame_pos = 0,
                 .volume = clamp(options.volume, 0, 4),
                 .pan = clamp(options.pan, -1, 1),
-                .looped = options.looped,
+                .loop = options.loop,
                 .group_id = options.group_id,
             };
             out_voice_id.?.* = @intCast(idx + 1);
@@ -343,6 +343,21 @@ pub fn stopVoice(engine: ?*Engine, voice_id: u32) i32 {
     if (idx >= e.voices.len) return Status.err_not_found;
     e.voices[idx].active = false;
     e.updateActiveVoiceCount();
+    return Status.ok;
+}
+
+pub fn setVoiceGroup(engine: ?*Engine, voice_id: u32, group_id: u32) i32 {
+    if (engine == null or voice_id == 0) return Status.err_invalid;
+    const e = engine.?;
+    e.lock.lock();
+    defer e.lock.unlock();
+
+    const voice_index: usize = @intCast(voice_id - 1);
+    const group_index: usize = @intCast(group_id);
+    if (voice_index >= e.voices.len or group_index >= e.groups.items.len) return Status.err_invalid;
+    if (!e.voices[voice_index].active) return Status.err_not_found;
+
+    e.voices[voice_index].group_id = group_id;
     return Status.ok;
 }
 
@@ -389,7 +404,7 @@ fn mixLocked(engine: *Engine, out: []f32, frame_count: u32, channels: u8, allow_
             const total_frames = sound.samples.len / channel_count;
 
             if (voice.frame_pos >= total_frames) {
-                if (voice.looped) {
+                if (voice.loop) {
                     voice.frame_pos = 0;
                 } else {
                     voice.active = false;

@@ -189,6 +189,10 @@ export fn audioStopVoice(engine: ?*native_audio.Engine, voice_id: u32) i32 {
     return native_audio.stopVoice(engine, voice_id);
 }
 
+export fn audioSetVoiceGroup(engine: ?*native_audio.Engine, voice_id: u32, group_id: u32) i32 {
+    return native_audio.setVoiceGroup(engine, voice_id, group_id);
+}
+
 export fn audioCreateGroup(engine: ?*native_audio.Engine, name_ptr: ?[*]const u8, name_len: usize, out_group_id: ?*u32) i32 {
     return native_audio.createGroup(engine, name_ptr, name_len, out_group_id);
 }

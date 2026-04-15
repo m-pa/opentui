@@ -4,7 +4,9 @@ import {
   BoxRenderable,
   CliRenderer,
   NativeAudio,
-  type NativeAudioSoundGroup,
+  type NativeAudioGroup,
+  type NativeAudioSound,
+  type NativeAudioVoice,
   TextRenderable,
   createCliRenderer,
   type KeyEvent,
@@ -39,10 +41,10 @@ let outputText: TextRenderable | null = null
 let keyHandler: ((event: KeyEvent) => void) | null = null
 
 let audio: NativeAudio | null = null
-let groups: { sfx: NativeAudioSoundGroup; music: NativeAudioSoundGroup; ui: NativeAudioSoundGroup } | null = null
-let soundIds: number[] = []
-let musicSoundId: number | null = null
-let musicVoiceId: number | null = null
+let groups: { sfx: NativeAudioGroup; music: NativeAudioGroup; ui: NativeAudioGroup } | null = null
+let sounds: NativeAudioSound[] = []
+let musicSound: NativeAudioSound | null = null
+let musicVoice: NativeAudioVoice | null = null
 let masterVolume = 1
 
 let lastAction = "Ready"
@@ -97,12 +99,12 @@ function updateHeader(): void {
 }
 
 function triggerSound(index: number): void {
-  if (!audio || !groups || index < 0 || index >= soundIds.length) return
+  if (!groups || index < 0 || index >= sounds.length) return
   const preset = PRESETS[index]
-  audio.play(soundIds[index], {
+  sounds[index].play({
     volume: preset.volume,
     pan: index === 0 ? -0.2 : index === 1 ? 0.2 : 0,
-    looped: false,
+    loop: false,
     group: groups[preset.groupName],
   })
   lastAction = `${preset.name} trigger`
@@ -134,9 +136,9 @@ export async function run(renderer: CliRenderer): Promise<void> {
 
   audio = NativeAudio.create({ autoStart: true })
   groups = {
-    sfx: audio.soundGroup("sfx"),
-    music: audio.soundGroup("music"),
-    ui: audio.soundGroup("ui"),
+    sfx: audio.group("sfx"),
+    music: audio.group("music"),
+    ui: audio.group("ui"),
   }
   masterVolume = 1
   audio.setMasterVolume(masterVolume)
@@ -144,18 +146,18 @@ export async function run(renderer: CliRenderer): Promise<void> {
   groups.ui.setVolume(0.9)
   groups.music.setVolume(0.42)
 
-  soundIds = PRESETS.map((preset) => {
+  sounds = PRESETS.map((preset) => {
     const wav = buildMonoPcm16Wav({
       frequency: preset.frequency,
       durationMs: preset.durationMs,
       amplitude: 0.95,
       decay: preset.decay,
     })
-    return audio!.loadWav(wav)
+    return audio!.loadSound(wav)
   })
 
   const bgmUrl = new URL("../../dev/bgm2.wav", import.meta.url)
-  musicSoundId = audio.loadWav(await Bun.file(bgmUrl).arrayBuffer())
+  musicSound = audio.loadSound(await Bun.file(bgmUrl).arrayBuffer())
 
   root = new BoxRenderable(renderer, {
     id: "native-audio-demo-root",
@@ -213,7 +215,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
   controlsText = new TextRenderable(renderer, {
     id: "native-audio-demo-controls",
     content:
-      "1 Jump 2 Coin 3 Thud B bgm | M/N master | soundGroup demo | Esc back",
+      "1 Jump 2 Coin 3 Thud B bgm | M/N master | group() demo | Esc back",
     fg: "#9CA3AF",
     height: 2,
     marginTop: 1,
@@ -222,11 +224,11 @@ export async function run(renderer: CliRenderer): Promise<void> {
 
   updateHeader()
 
-  if (musicSoundId && groups) {
-    musicVoiceId = audio.play(musicSoundId, {
+  if (musicSound && groups) {
+    musicVoice = musicSound.play({
       volume: 0.42,
       pan: 0,
-      looped: true,
+      loop: true,
       group: groups.music,
     })
     lastAction = "BGM auto start"
@@ -248,17 +250,17 @@ export async function run(renderer: CliRenderer): Promise<void> {
         triggerSound(2)
         break
       case "b":
-        if (!musicSoundId) break
-        if (musicVoiceId) {
-          audio.stopVoice(musicVoiceId)
-          musicVoiceId = null
+        if (!musicSound) break
+        if (musicVoice) {
+          musicVoice.stop()
+          musicVoice = null
           lastAction = "BGM stop"
         } else {
           if (!groups) break
-          musicVoiceId = audio.play(musicSoundId, {
+          musicVoice = musicSound.play({
             volume: 0.5,
             pan: 0,
-            looped: true,
+            loop: true,
             group: groups.music,
           })
           lastAction = "BGM start"
@@ -305,9 +307,9 @@ export function destroy(renderer: CliRenderer): void {
   audio?.dispose()
   audio = null
   groups = null
-  soundIds = []
-  musicSoundId = null
-  musicVoiceId = null
+  sounds = []
+  musicSound = null
+  musicVoice = null
   masterVolume = 1
   lastAction = "Ready"
 }

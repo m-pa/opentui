@@ -49,11 +49,11 @@ test("NativeAudio loads wav and mixes frames", () => {
   instances.push(audio)
 
   const wav = buildMonoPcm16Wav([0, 0.25, -0.25, 0.5, -0.5, 0])
-  const soundId = audio.loadWav(wav)
-  const sfx = audio.soundGroup("sfx")
+  const sound = audio.loadSound(wav)
+  const sfx = audio.group("sfx")
 
   audio.start()
-  audio.play(soundId, { group: sfx, volume: 1, pan: 0, looped: false })
+  sound.play({ group: sfx, volume: 1, pan: 0, loop: false })
   const mixed = audio.mixFrames(6, 2)
 
   expect(mixed.length).toBe(12)
