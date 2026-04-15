@@ -260,13 +260,11 @@ export const ReserveInfoStruct = defineStruct(
   },
 )
 
-export type AudioBus = "master" | "sfx" | "music" | "ui"
-
 export type AudioVoiceOptions = {
   volume?: number
   pan?: number
   looped?: boolean
-  bus?: AudioBus
+  groupId?: number
 }
 
 export type AudioStats = {
@@ -278,13 +276,11 @@ export type AudioStats = {
   lastRms: number
 }
 
-const AudioBusEnum = defineEnum({ master: 0, sfx: 1, music: 2, ui: 3 }, "u8")
-
 export const AudioVoiceOptionsStruct = defineStruct([
   ["volume", "f32", { default: 1 }],
   ["pan", "f32", { default: 0 }],
   ["looped", "bool_u8", { default: false }],
-  ["bus", AudioBusEnum, { default: "sfx" }],
+  ["groupId", "u32", { default: 0 }],
 ])
 
 export const AudioStatsStruct = defineStruct([

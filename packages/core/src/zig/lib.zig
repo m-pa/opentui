@@ -189,8 +189,16 @@ export fn audioStopVoice(engine: ?*native_audio.Engine, voice_id: u32) i32 {
     return native_audio.stopVoice(engine, voice_id);
 }
 
-export fn audioSetBusVolume(engine: ?*native_audio.Engine, bus: u8, volume: f32) i32 {
-    return native_audio.setBusVolume(engine, bus, volume);
+export fn audioCreateGroup(engine: ?*native_audio.Engine, name_ptr: ?[*]const u8, name_len: usize, out_group_id: ?*u32) i32 {
+    return native_audio.createGroup(engine, name_ptr, name_len, out_group_id);
+}
+
+export fn audioSetGroupVolume(engine: ?*native_audio.Engine, group_id: u32, volume: f32) i32 {
+    return native_audio.setGroupVolume(engine, group_id, volume);
+}
+
+export fn audioSetMasterVolume(engine: ?*native_audio.Engine, volume: f32) i32 {
+    return native_audio.setMasterVolume(engine, volume);
 }
 
 export fn audioMixToBuffer(engine: ?*native_audio.Engine, out_ptr: ?[*]f32, frame_count: u32, channels: u8) i32 {

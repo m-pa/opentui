@@ -470,7 +470,7 @@ const examples: Example[] = [
   },
   {
     name: "NativeAudio Demo",
-    description: "WAV-based native mixer with buses and live meter stats",
+    description: "WAV-based native mixer with sound groups and live meter stats",
     run: nativeAudioDemo.run,
     destroy: nativeAudioDemo.destroy,
   },

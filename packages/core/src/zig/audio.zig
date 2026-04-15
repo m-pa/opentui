@@ -12,21 +12,13 @@ pub const Status = struct {
     pub const err_device: i32 = -5;
 };
 
-pub const Bus = enum(u8) {
-    master = 0,
-    sfx = 1,
-    music = 2,
-    ui = 3,
-};
-
-pub const bus_count: usize = 4;
 pub const max_voices: usize = 32;
 
 pub const VoiceOptions = extern struct {
     volume: f32,
     pan: f32,
     looped: bool,
-    bus: u8,
+    group_id: u32,
 };
 
 pub const Stats = extern struct {
@@ -51,7 +43,12 @@ const Voice = struct {
     volume: f32 = 1,
     pan: f32 = 0,
     looped: bool = false,
-    bus: u8 = @intFromEnum(Bus.sfx),
+    group_id: u32 = 0,
+};
+
+const SoundGroup = struct {
+    name: []u8,
+    volume: f32 = 1,
 };
 
 pub const Engine = struct {
@@ -59,8 +56,9 @@ pub const Engine = struct {
     started: bool = false,
     lock: std.Thread.Mutex = .{},
     sounds: std.ArrayList(Sound),
+    groups: std.ArrayList(SoundGroup),
     voices: [max_voices]Voice,
-    bus_volumes: [bus_count]f32,
+    master_volume: f32,
     stats: Stats,
     device: c.ma_device = undefined,
     has_device: bool = false,
@@ -71,8 +69,9 @@ pub const Engine = struct {
             .allocator = allocator,
             .started = false,
             .sounds = .empty,
+            .groups = .empty,
             .voices = [_]Voice{.{}} ** max_voices,
-            .bus_volumes = [_]f32{ 1, 1, 1, 1 },
+            .master_volume = 1,
             .stats = .{
                 .sounds_loaded = 0,
                 .voices_active = 0,
@@ -96,7 +95,11 @@ pub const Engine = struct {
         for (self.sounds.items) |sound| {
             self.allocator.free(sound.samples);
         }
+        for (self.groups.items) |group| {
+            self.allocator.free(group.name);
+        }
         self.sounds.deinit(self.allocator);
+        self.groups.deinit(self.allocator);
     }
 
     fn updateActiveVoiceCount(self: *Engine) void {
@@ -192,7 +195,17 @@ fn decodeSoundFromMemory(allocator: std.mem.Allocator, bytes: []const u8) !Sound
 
 pub fn create(allocator: std.mem.Allocator) ?*Engine {
     const engine = allocator.create(Engine) catch return null;
+    errdefer allocator.destroy(engine);
     engine.* = Engine.init(allocator);
+
+    const default_name = allocator.dupe(u8, "default") catch return null;
+    errdefer allocator.free(default_name);
+
+    engine.groups.append(allocator, .{
+        .name = default_name,
+        .volume = 1,
+    }) catch return null;
+
     return engine;
 }
 
@@ -257,6 +270,33 @@ pub fn loadWav(engine: ?*Engine, data_ptr: ?[*]const u8, data_len: usize, out_so
     return Status.ok;
 }
 
+pub fn createGroup(engine: ?*Engine, name_ptr: ?[*]const u8, name_len: usize, out_group_id: ?*u32) i32 {
+    if (engine == null or name_ptr == null or out_group_id == null) return Status.err_invalid;
+    const e = engine.?;
+    const name = @as([*]const u8, @ptrCast(name_ptr.?))[0..name_len];
+
+    e.lock.lock();
+    defer e.lock.unlock();
+
+    for (e.groups.items, 0..) |group, idx| {
+        if (std.mem.eql(u8, group.name, name)) {
+            out_group_id.?.* = @intCast(idx);
+            return Status.ok;
+        }
+    }
+
+    const owned_name = e.allocator.dupe(u8, name) catch return Status.err_no_space;
+    errdefer e.allocator.free(owned_name);
+
+    e.groups.append(e.allocator, .{
+        .name = owned_name,
+        .volume = 1,
+    }) catch return Status.err_no_space;
+
+    out_group_id.?.* = @intCast(e.groups.items.len - 1);
+    return Status.ok;
+}
+
 pub fn play(engine: ?*Engine, sound_id: u32, options_ptr: ?*const VoiceOptions, out_voice_id: ?*u32) i32 {
     if (engine == null or out_voice_id == null) return Status.err_invalid;
     const e = engine.?;
@@ -268,10 +308,11 @@ pub fn play(engine: ?*Engine, sound_id: u32, options_ptr: ?*const VoiceOptions, 
         .volume = 1,
         .pan = 0,
         .looped = false,
-        .bus = @intFromEnum(Bus.sfx),
+        .group_id = 0,
     };
 
-    if (options.bus >= bus_count) return Status.err_invalid;
+    const group_index: usize = @intCast(options.group_id);
+    if (group_index >= e.groups.items.len) return Status.err_invalid;
 
     for (&e.voices, 0..) |*voice, idx| {
         if (!voice.active) {
@@ -282,7 +323,7 @@ pub fn play(engine: ?*Engine, sound_id: u32, options_ptr: ?*const VoiceOptions, 
                 .volume = clamp(options.volume, 0, 4),
                 .pan = clamp(options.pan, -1, 1),
                 .looped = options.looped,
-                .bus = options.bus,
+                .group_id = options.group_id,
             };
             out_voice_id.?.* = @intCast(idx + 1);
             e.updateActiveVoiceCount();
@@ -305,12 +346,24 @@ pub fn stopVoice(engine: ?*Engine, voice_id: u32) i32 {
     return Status.ok;
 }
 
-pub fn setBusVolume(engine: ?*Engine, bus: u8, volume: f32) i32 {
-    if (engine == null or bus >= bus_count) return Status.err_invalid;
+pub fn setGroupVolume(engine: ?*Engine, group_id: u32, volume: f32) i32 {
+    if (engine == null) return Status.err_invalid;
     const e = engine.?;
     e.lock.lock();
     defer e.lock.unlock();
-    e.bus_volumes[bus] = clamp(volume, 0, 4);
+
+    const group_index: usize = @intCast(group_id);
+    if (group_index >= e.groups.items.len) return Status.err_invalid;
+    e.groups.items[group_index].volume = clamp(volume, 0, 4);
+    return Status.ok;
+}
+
+pub fn setMasterVolume(engine: ?*Engine, volume: f32) i32 {
+    if (engine == null) return Status.err_invalid;
+    const e = engine.?;
+    e.lock.lock();
+    defer e.lock.unlock();
+    e.master_volume = clamp(volume, 0, 4);
     return Status.ok;
 }
 
@@ -352,7 +405,8 @@ fn mixLocked(engine: *Engine, out: []f32, frame_count: u32, channels: u8, allow_
             const pan = voice.pan;
             const pan_l = if (pan > 0) 1 - pan else 1;
             const pan_r = if (pan < 0) 1 + pan else 1;
-            const gain = voice.volume * engine.bus_volumes[voice.bus];
+            const group_index: usize = @intCast(voice.group_id);
+            const gain = voice.volume * engine.groups.items[group_index].volume;
 
             const left = src_l * gain * pan_l;
             const right = src_r * gain * pan_r;
@@ -363,7 +417,7 @@ fn mixLocked(engine: *Engine, out: []f32, frame_count: u32, channels: u8, allow_
             voice.frame_pos += 1;
         }
 
-        const master = engine.bus_volumes[@intFromEnum(Bus.master)];
+        const master = engine.master_volume;
         const out_l = clamp(dry_l * master, -1, 1);
         const out_r = clamp(dry_r * master, -1, 1);
         out[frame * 2] = out_l;

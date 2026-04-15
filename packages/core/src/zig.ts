@@ -41,7 +41,6 @@ import type {
   NativeSpanFeedOptions,
   NativeSpanFeedStats,
   ReserveInfo,
-  AudioBus,
   AudioVoiceOptions,
   AudioStats,
   BuildOptions,
@@ -104,8 +103,6 @@ registerEnvVar({
 const CURSOR_STYLE_TO_ID = { block: 0, line: 1, underline: 2, default: 3 } as const
 const CURSOR_ID_TO_STYLE = ["block", "line", "underline", "default"] as const
 const MOUSE_STYLE_TO_ID = { default: 0, pointer: 1, text: 2, crosshair: 3, move: 4, "not-allowed": 5 } as const
-const AUDIO_BUS_TO_ID: Record<AudioBus, number> = { master: 0, sfx: 1, music: 2, ui: 3 }
-
 // Global singleton state for FFI tracing to prevent duplicate exit handlers
 let globalTraceSymbols: Record<string, number[]> | null = null
 let globalFFILogPath: string | null = null
@@ -1120,8 +1117,16 @@ function getOpenTUILib(libPath?: string) {
       args: ["ptr", "u32"],
       returns: "i32",
     },
-    audioSetBusVolume: {
-      args: ["ptr", "u8", "f32"],
+    audioCreateGroup: {
+      args: ["ptr", "ptr", "u64", "ptr"],
+      returns: "i32",
+    },
+    audioSetGroupVolume: {
+      args: ["ptr", "u32", "f32"],
+      returns: "i32",
+    },
+    audioSetMasterVolume: {
+      args: ["ptr", "f32"],
       returns: "i32",
     },
     audioMixToBuffer: {
@@ -1878,7 +1883,9 @@ export interface RenderLib {
   audioLoadWav: (engine: Pointer, data: Uint8Array) => { status: number; soundId: number | null }
   audioPlay: (engine: Pointer, soundId: number, options?: AudioVoiceOptions) => { status: number; voiceId: number | null }
   audioStopVoice: (engine: Pointer, voiceId: number) => number
-  audioSetBusVolume: (engine: Pointer, bus: AudioBus, volume: number) => number
+  audioCreateGroup: (engine: Pointer, name: string) => { status: number; groupId: number | null }
+  audioSetGroupVolume: (engine: Pointer, groupId: number, volume: number) => number
+  audioSetMasterVolume: (engine: Pointer, volume: number) => number
   audioMixToBuffer: (engine: Pointer, outBuffer: Float32Array, frameCount: number, channels: number) => number
   audioGetStats: (engine: Pointer) => AudioStats | null
 
@@ -3801,9 +3808,23 @@ class FFIRenderLib implements RenderLib {
     return this.opentui.symbols.audioStopVoice(engine, voiceId)
   }
 
-  public audioSetBusVolume(engine: Pointer, bus: AudioBus, volume: number): number {
-    const busId = AUDIO_BUS_TO_ID[bus]
-    return this.opentui.symbols.audioSetBusVolume(engine, busId, volume)
+  public audioCreateGroup(engine: Pointer, name: string): { status: number; groupId: number | null } {
+    const outBuffer = new ArrayBuffer(4)
+    const nameBytes = this.encoder.encode(name)
+    const status = this.opentui.symbols.audioCreateGroup(engine, ptr(nameBytes), nameBytes.length, ptr(outBuffer))
+    if (status !== 0) {
+      return { status, groupId: null }
+    }
+    const view = new Uint32Array(outBuffer)
+    return { status, groupId: view[0] }
+  }
+
+  public audioSetGroupVolume(engine: Pointer, groupId: number, volume: number): number {
+    return this.opentui.symbols.audioSetGroupVolume(engine, groupId, volume)
+  }
+
+  public audioSetMasterVolume(engine: Pointer, volume: number): number {
+    return this.opentui.symbols.audioSetMasterVolume(engine, volume)
   }
 
   public audioMixToBuffer(engine: Pointer, outBuffer: Float32Array, frameCount: number, channels: number): number {

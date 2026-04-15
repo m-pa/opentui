@@ -1,6 +1,6 @@
 import type { Pointer } from "bun:ffi"
 import { resolveRenderLib, type RenderLib } from "./zig.js"
-import type { AudioBus, AudioStats, AudioVoiceOptions } from "./zig-structs.js"
+import type { AudioStats, AudioVoiceOptions } from "./zig-structs.js"
 
 interface NativeAudioBackend {
   createAudioEngine: () => Pointer | null
@@ -10,7 +10,9 @@ interface NativeAudioBackend {
   audioLoadWav: (engine: Pointer, data: Uint8Array) => { status: number; soundId: number | null }
   audioPlay: (engine: Pointer, soundId: number, options?: AudioVoiceOptions) => { status: number; voiceId: number | null }
   audioStopVoice: (engine: Pointer, voiceId: number) => number
-  audioSetBusVolume: (engine: Pointer, bus: AudioBus, volume: number) => number
+  audioCreateGroup: (engine: Pointer, name: string) => { status: number; groupId: number | null }
+  audioSetGroupVolume: (engine: Pointer, groupId: number, volume: number) => number
+  audioSetMasterVolume: (engine: Pointer, volume: number) => number
   audioMixToBuffer: (engine: Pointer, outBuffer: Float32Array, frameCount: number, channels: number) => number
   audioGetStats: (engine: Pointer) => AudioStats | null
 }
@@ -18,6 +20,25 @@ interface NativeAudioBackend {
 export interface NativeAudioSetupOptions {
   autoStart?: boolean
   allowMissingBackend?: boolean
+}
+
+export interface NativeAudioPlayOptions {
+  volume?: number
+  pan?: number
+  looped?: boolean
+  group?: NativeAudioSoundGroup
+}
+
+export class NativeAudioSoundGroup {
+  constructor(
+    readonly id: number,
+    readonly name: string,
+    private readonly setVolumeImpl: (volume: number) => void,
+  ) {}
+
+  setVolume(volume: number): void {
+    this.setVolumeImpl(volume)
+  }
 }
 
 function hasAudioBackend(lib: RenderLib): lib is RenderLib & NativeAudioBackend {
@@ -30,7 +51,9 @@ function hasAudioBackend(lib: RenderLib): lib is RenderLib & NativeAudioBackend 
     typeof maybe.audioLoadWav === "function" &&
     typeof maybe.audioPlay === "function" &&
     typeof maybe.audioStopVoice === "function" &&
-    typeof maybe.audioSetBusVolume === "function" &&
+    typeof maybe.audioCreateGroup === "function" &&
+    typeof maybe.audioSetGroupVolume === "function" &&
+    typeof maybe.audioSetMasterVolume === "function" &&
     typeof maybe.audioMixToBuffer === "function" &&
     typeof maybe.audioGetStats === "function"
   )
@@ -53,6 +76,7 @@ export class NativeAudio {
   readonly available: boolean
   private readonly lib: (RenderLib & NativeAudioBackend) | null
   private engine: Pointer | null = null
+  private readonly groups = new Map<string, NativeAudioSoundGroup>()
   private started = false
 
   private constructor(lib: RenderLib, options: NativeAudioSetupOptions) {
@@ -119,11 +143,43 @@ export class NativeAudio {
     return this.loadWav(bytes)
   }
 
-  play(soundId: number, options?: AudioVoiceOptions): number {
+  soundGroup(name: string): NativeAudioSoundGroup {
     if (!this.available || !this.lib || !this.engine) {
       throw new Error("NativeAudio backend unavailable")
     }
-    const result = this.lib.audioPlay(this.engine, soundId, options)
+
+    const existing = this.groups.get(name)
+    if (existing) {
+      return existing
+    }
+
+    const result = this.lib.audioCreateGroup(this.engine, name)
+    if (result.status !== 0 || result.groupId == null) {
+      throw statusToError("soundGroup", result.status)
+    }
+
+    const group = new NativeAudioSoundGroup(result.groupId, name, (volume) => {
+      this.setGroupVolumeById(result.groupId!, volume)
+    })
+    this.groups.set(name, group)
+    return group
+  }
+
+  play(soundId: number, options?: NativeAudioPlayOptions): number {
+    if (!this.available || !this.lib || !this.engine) {
+      throw new Error("NativeAudio backend unavailable")
+    }
+
+    const rawOptions = options
+      ? {
+          volume: options.volume,
+          pan: options.pan,
+          looped: options.looped,
+          groupId: options.group?.id ?? 0,
+        }
+      : undefined
+
+    const result = this.lib.audioPlay(this.engine, soundId, rawOptions)
     if (result.status !== 0 || result.voiceId == null) {
       throw statusToError("play", result.status)
     }
@@ -138,11 +194,11 @@ export class NativeAudio {
     }
   }
 
-  setBusVolume(bus: AudioBus, volume: number): void {
+  setMasterVolume(volume: number): void {
     if (!this.available || !this.lib || !this.engine) return
-    const status = this.lib.audioSetBusVolume(this.engine, bus, volume)
+    const status = this.lib.audioSetMasterVolume(this.engine, volume)
     if (status !== 0) {
-      throw statusToError("setBusVolume", status)
+      throw statusToError("setMasterVolume", status)
     }
   }
 
@@ -168,8 +224,17 @@ export class NativeAudio {
     if (this.started) {
       this.stop()
     }
+    this.groups.clear()
     this.lib.destroyAudioEngine(this.engine)
     this.engine = null
+  }
+
+  private setGroupVolumeById(groupId: number, volume: number): void {
+    if (!this.available || !this.lib || !this.engine) return
+    const status = this.lib.audioSetGroupVolume(this.engine, groupId, volume)
+    if (status !== 0) {
+      throw statusToError("setGroupVolume", status)
+    }
   }
 }
 
