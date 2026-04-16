@@ -1435,7 +1435,23 @@ export interface CursorState {
 
 export type NativeSpanFeedEventHandler = (eventId: number, arg0: Pointer, arg1: number | bigint) => void
 
-export interface RenderLib {
+export interface AudioEngineLib {
+  createAudioEngine: () => Pointer | null
+  destroyAudioEngine: (engine: Pointer) => void
+  audioStart: (engine: Pointer) => number
+  audioStop: (engine: Pointer) => number
+  audioLoad: (engine: Pointer, data: Uint8Array) => { status: number; soundId: number | null }
+  audioPlay: (engine: Pointer, soundId: number, options?: AudioVoiceOptions) => { status: number; voiceId: number | null }
+  audioStopVoice: (engine: Pointer, voiceId: number) => number
+  audioSetVoiceGroup: (engine: Pointer, voiceId: number, groupId: number) => number
+  audioCreateGroup: (engine: Pointer, name: string) => { status: number; groupId: number | null }
+  audioSetGroupVolume: (engine: Pointer, groupId: number, volume: number) => number
+  audioSetMasterVolume: (engine: Pointer, volume: number) => number
+  audioMixToBuffer: (engine: Pointer, outBuffer: Float32Array, frameCount: number, channels: number) => number
+  audioGetStats: (engine: Pointer) => AudioStats | null
+}
+
+export interface RenderLib extends AudioEngineLib {
   createRenderer: (width: number, height: number, options?: { testing?: boolean; remote?: boolean }) => Pointer | null
   setTerminalEnvVar: (renderer: Pointer, key: string, value: string) => boolean
   destroyRenderer: (renderer: Pointer) => void
@@ -1879,20 +1895,6 @@ export interface RenderLib {
   ) => { ptr: Pointer; data: Array<{ width: number; char: number }> } | null
   freeUnicode: (encoded: { ptr: Pointer; data: Array<{ width: number; char: number }> }) => void
   bufferDrawChar: (buffer: Pointer, char: number, x: number, y: number, fg: RGBA, bg: RGBA, attributes?: number) => void
-
-  createAudioEngine: () => Pointer | null
-  destroyAudioEngine: (engine: Pointer) => void
-  audioStart: (engine: Pointer) => number
-  audioStop: (engine: Pointer) => number
-  audioLoad: (engine: Pointer, data: Uint8Array) => { status: number; soundId: number | null }
-  audioPlay: (engine: Pointer, soundId: number, options?: AudioVoiceOptions) => { status: number; voiceId: number | null }
-  audioStopVoice: (engine: Pointer, voiceId: number) => number
-  audioSetVoiceGroup: (engine: Pointer, voiceId: number, groupId: number) => number
-  audioCreateGroup: (engine: Pointer, name: string) => { status: number; groupId: number | null }
-  audioSetGroupVolume: (engine: Pointer, groupId: number, volume: number) => number
-  audioSetMasterVolume: (engine: Pointer, volume: number) => number
-  audioMixToBuffer: (engine: Pointer, outBuffer: Float32Array, frameCount: number, channels: number) => number
-  audioGetStats: (engine: Pointer) => AudioStats | null
 
   registerNativeSpanFeedStream: (stream: Pointer, handler: NativeSpanFeedEventHandler) => void
   unregisterNativeSpanFeedStream: (stream: Pointer) => void
