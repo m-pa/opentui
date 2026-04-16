@@ -139,25 +139,25 @@ function presetBasePan(index: number): number {
 }
 
 function applyGroupVolumes(): void {
-  if (!groups) return
-  groups.sfx.setVolume(effectsVolume)
-  groups.ui.setVolume(clampVolume(effectsVolume * 0.9))
-  groups.music.setVolume(bgmVolume)
+  if (!groups || !audio) return
+  audio.setGroupVolume(groups.sfx, effectsVolume)
+  audio.setGroupVolume(groups.ui, clampVolume(effectsVolume * 0.9))
+  audio.setGroupVolume(groups.music, bgmVolume)
 }
 
 function playBgmVoice(): void {
-  if (!musicSound || !groups) return
-  musicVoice = musicSound.play({
+  if (!musicSound || !groups || !audio) return
+  musicVoice = audio.play(musicSound, {
     volume: 1,
     pan: clampPan(bgmPan + masterPan),
     loop: true,
-    group: groups.music,
+    groupId: groups.music,
   })
 }
 
 function restartBgmVoiceIfPlaying(): void {
-  if (!musicVoice) return
-  musicVoice.stop()
+  if (!musicVoice || !audio) return
+  audio.stopVoice(musicVoice)
   musicVoice = null
   playBgmVoice()
 }
@@ -241,13 +241,13 @@ function updateHeader(): void {
 }
 
 function triggerSound(index: number): void {
-  if (!groups || index < 0 || index >= sounds.length) return
+  if (!groups || !audio || index < 0 || index >= sounds.length) return
   const preset = PRESETS[index]
-  sounds[index].play({
+  audio.play(sounds[index], {
     volume: preset.volume,
     pan: clampPan(presetBasePan(index) + effectsPan + masterPan),
     loop: false,
-    group: groups[preset.groupName],
+    groupId: groups[preset.groupName],
   })
   lastAction = `${preset.name} trigger`
   updateHeader()
@@ -420,7 +420,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
       case "b":
         if (!musicSound) break
         if (musicVoice) {
-          musicVoice.stop()
+          audio.stopVoice(musicVoice)
           musicVoice = null
           lastAction = "BGM stop"
         } else {

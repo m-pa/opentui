@@ -61,7 +61,7 @@ test("Audio loads wav and mixes frames", () => {
   const sfx = audio.group("sfx")
 
   audio.start()
-  sound.play({ group: sfx, volume: 1, pan: 0, loop: false })
+  audio.play(sound, { group: sfx, volume: 1, pan: 0, loop: false })
   const mixed = audio.mixFrames(6, 2)
 
   expect(mixed.length).toBe(12)
@@ -77,7 +77,7 @@ test("Audio mixes into mono and multichannel output buffers", () => {
   const sound = audio.loadSound(wav)
 
   audio.start()
-  sound.play({ volume: 1, pan: 0, loop: true })
+  audio.play(sound, { volume: 1, pan: 0, loop: true })
 
   const mono = audio.mixFrames(6, 1)
   expect(mono.length).toBe(6)
@@ -101,7 +101,7 @@ test("Audio counts underruns when callback cannot lock engine", async () => {
   const sound = audio.loadSound(wav)
 
   audio.start()
-  sound.play({ volume: 1, pan: 0, loop: true })
+  audio.play(sound, { volume: 1, pan: 0, loop: true })
 
   const initialUnderruns = audio.getStats()?.underruns ?? 0
   const deadline = Date.now() + 1_500
