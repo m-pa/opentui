@@ -63,9 +63,16 @@ export class Audio {
     }
   }
 
+  private requireEngine(action: string): Pointer {
+    if (!this.engine) {
+      throw new Error(`Audio engine unavailable during ${action}`)
+    }
+    return this.engine
+  }
+
   start(): void {
     if (this.started) return
-    const status = this.lib.audioStart(this.engine!)
+    const status = this.lib.audioStart(this.requireEngine("start"))
     if (status !== 0) {
       throw statusToError("start", status)
     }
@@ -74,7 +81,7 @@ export class Audio {
 
   stop(): void {
     if (!this.started) return
-    const status = this.lib.audioStop(this.engine!)
+    const status = this.lib.audioStop(this.requireEngine("stop"))
     if (status !== 0) {
       throw statusToError("stop", status)
     }
@@ -86,7 +93,7 @@ export class Audio {
   }
 
   loadSound(data: Uint8Array | ArrayBuffer): AudioSound {
-    const result = this.lib.audioLoad(this.engine!, toBytes(data))
+    const result = this.lib.audioLoad(this.requireEngine("loadSound"), toBytes(data))
     if (result.status !== 0 || result.soundId == null) {
       throw statusToError("loadSound", result.status)
     }
@@ -104,7 +111,7 @@ export class Audio {
       return existing
     }
 
-    const result = this.lib.audioCreateGroup(this.engine!, name)
+    const result = this.lib.audioCreateGroup(this.requireEngine("group"), name)
     if (result.status !== 0 || result.groupId == null) {
       throw statusToError("group", result.status)
     }
@@ -123,7 +130,7 @@ export class Audio {
         }
       : undefined
 
-    const result = this.lib.audioPlay(this.engine!, sound, rawOptions)
+    const result = this.lib.audioPlay(this.requireEngine("play"), sound, rawOptions)
     if (result.status !== 0 || result.voiceId == null) {
       throw statusToError("play", result.status)
     }
@@ -132,28 +139,28 @@ export class Audio {
   }
 
   stopVoice(voice: AudioVoice): void {
-    const status = this.lib.audioStopVoice(this.engine!, voice)
+    const status = this.lib.audioStopVoice(this.requireEngine("stopVoice"), voice)
     if (status !== 0) {
       throw statusToError("stopVoice", status)
     }
   }
 
   setVoiceGroup(voice: AudioVoice, group: AudioGroup): void {
-    const status = this.lib.audioSetVoiceGroup(this.engine!, voice, group)
+    const status = this.lib.audioSetVoiceGroup(this.requireEngine("setVoiceGroup"), voice, group)
     if (status !== 0) {
       throw statusToError("setVoiceGroup", status)
     }
   }
 
   setGroupVolume(group: AudioGroup, volume: number): void {
-    const status = this.lib.audioSetGroupVolume(this.engine!, group, volume)
+    const status = this.lib.audioSetGroupVolume(this.requireEngine("setGroupVolume"), group, volume)
     if (status !== 0) {
       throw statusToError("setGroupVolume", status)
     }
   }
 
   setMasterVolume(volume: number): void {
-    const status = this.lib.audioSetMasterVolume(this.engine!, volume)
+    const status = this.lib.audioSetMasterVolume(this.requireEngine("setMasterVolume"), volume)
     if (status !== 0) {
       throw statusToError("setMasterVolume", status)
     }
@@ -161,7 +168,7 @@ export class Audio {
 
   mixFrames(frameCount: number, channels: number = 2): Float32Array {
     const output = new Float32Array(frameCount * channels)
-    const status = this.lib.audioMixToBuffer(this.engine!, output, frameCount, channels)
+    const status = this.lib.audioMixToBuffer(this.requireEngine("mixFrames"), output, frameCount, channels)
     if (status !== 0) {
       throw statusToError("mixFrames", status)
     }
@@ -169,15 +176,16 @@ export class Audio {
   }
 
   getStats(): AudioStats | null {
-    return this.lib.audioGetStats(this.engine!)
+    return this.lib.audioGetStats(this.requireEngine("getStats"))
   }
 
   dispose(): void {
+    if (!this.engine) return
     if (this.started) {
       this.stop()
     }
     this.groups.clear()
-    this.lib.destroyAudioEngine(this.engine!)
+    this.lib.destroyAudioEngine(this.engine)
     this.engine = null
   }
 }

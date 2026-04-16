@@ -165,51 +165,51 @@ export fn createAudioEngine() ?*native_audio.Engine {
     return native_audio.create(globalAllocator);
 }
 
-export fn destroyAudioEngine(engine: ?*native_audio.Engine) void {
+export fn destroyAudioEngine(engine: *native_audio.Engine) void {
     native_audio.destroy(engine);
 }
 
-export fn audioStart(engine: ?*native_audio.Engine) i32 {
+export fn audioStart(engine: *native_audio.Engine) i32 {
     return native_audio.start(engine);
 }
 
-export fn audioStop(engine: ?*native_audio.Engine) i32 {
+export fn audioStop(engine: *native_audio.Engine) i32 {
     return native_audio.stop(engine);
 }
 
-export fn audioLoad(engine: ?*native_audio.Engine, data_ptr: ?[*]const u8, data_len: usize, out_sound_id: ?*u32) i32 {
+export fn audioLoad(engine: *native_audio.Engine, data_ptr: ?[*]const u8, data_len: usize, out_sound_id: ?*u32) i32 {
     return native_audio.load(engine, data_ptr, data_len, out_sound_id);
 }
 
-export fn audioPlay(engine: ?*native_audio.Engine, sound_id: u32, options_ptr: ?*const native_audio.VoiceOptions, out_voice_id: ?*u32) i32 {
+export fn audioPlay(engine: *native_audio.Engine, sound_id: u32, options_ptr: ?*const native_audio.VoiceOptions, out_voice_id: ?*u32) i32 {
     return native_audio.play(engine, sound_id, options_ptr, out_voice_id);
 }
 
-export fn audioStopVoice(engine: ?*native_audio.Engine, voice_id: u32) i32 {
+export fn audioStopVoice(engine: *native_audio.Engine, voice_id: u32) i32 {
     return native_audio.stopVoice(engine, voice_id);
 }
 
-export fn audioSetVoiceGroup(engine: ?*native_audio.Engine, voice_id: u32, group_id: u32) i32 {
+export fn audioSetVoiceGroup(engine: *native_audio.Engine, voice_id: u32, group_id: u32) i32 {
     return native_audio.setVoiceGroup(engine, voice_id, group_id);
 }
 
-export fn audioCreateGroup(engine: ?*native_audio.Engine, name_ptr: ?[*]const u8, name_len: usize, out_group_id: ?*u32) i32 {
+export fn audioCreateGroup(engine: *native_audio.Engine, name_ptr: ?[*]const u8, name_len: usize, out_group_id: ?*u32) i32 {
     return native_audio.createGroup(engine, name_ptr, name_len, out_group_id);
 }
 
-export fn audioSetGroupVolume(engine: ?*native_audio.Engine, group_id: u32, volume: f32) i32 {
+export fn audioSetGroupVolume(engine: *native_audio.Engine, group_id: u32, volume: f32) i32 {
     return native_audio.setGroupVolume(engine, group_id, volume);
 }
 
-export fn audioSetMasterVolume(engine: ?*native_audio.Engine, volume: f32) i32 {
+export fn audioSetMasterVolume(engine: *native_audio.Engine, volume: f32) i32 {
     return native_audio.setMasterVolume(engine, volume);
 }
 
-export fn audioMixToBuffer(engine: ?*native_audio.Engine, out_ptr: ?[*]f32, frame_count: u32, channels: u8) i32 {
+export fn audioMixToBuffer(engine: *native_audio.Engine, out_ptr: ?[*]f32, frame_count: u32, channels: u8) i32 {
     return native_audio.mixToBuffer(engine, out_ptr, frame_count, channels);
 }
 
-export fn audioGetStats(engine: ?*native_audio.Engine, out_stats: ?*native_audio.Stats) i32 {
+export fn audioGetStats(engine: *native_audio.Engine, out_stats: ?*native_audio.Stats) i32 {
     return native_audio.getStats(engine, out_stats);
 }
 

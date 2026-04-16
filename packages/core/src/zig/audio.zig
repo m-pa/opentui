@@ -244,16 +244,14 @@ pub fn create(allocator: std.mem.Allocator) ?*Engine {
     return engine;
 }
 
-pub fn destroy(engine: ?*Engine) void {
-    if (engine == null) return;
-    const e = engine.?;
+pub fn destroy(engine: *Engine) void {
+    const e = engine;
     e.deinit();
     e.allocator.destroy(e);
 }
 
-pub fn start(engine: ?*Engine) i32 {
-    if (engine == null) return Status.err_invalid;
-    const e = engine.?;
+pub fn start(engine: *Engine) i32 {
+    const e = engine;
     if (e.started) return Status.ok;
 
     if (!e.has_device) {
@@ -280,9 +278,8 @@ pub fn start(engine: ?*Engine) i32 {
     return Status.ok;
 }
 
-pub fn stop(engine: ?*Engine) i32 {
-    if (engine == null) return Status.err_invalid;
-    const e = engine.?;
+pub fn stop(engine: *Engine) i32 {
+    const e = engine;
     if (e.has_device) {
         _ = c.ma_device_stop(&e.device);
     }
@@ -290,9 +287,9 @@ pub fn stop(engine: ?*Engine) i32 {
     return Status.ok;
 }
 
-pub fn load(engine: ?*Engine, data_ptr: ?[*]const u8, data_len: usize, out_sound_id: ?*u32) i32 {
-    if (engine == null or data_ptr == null or out_sound_id == null or data_len == 0) return Status.err_invalid;
-    const e = engine.?;
+pub fn load(engine: *Engine, data_ptr: ?[*]const u8, data_len: usize, out_sound_id: ?*u32) i32 {
+    if (data_ptr == null or out_sound_id == null or data_len == 0) return Status.err_invalid;
+    const e = engine;
     const encoded_audio = @as([*]const u8, @ptrCast(data_ptr.?))[0..data_len];
     const sound = decodeSoundFromMemory(e.allocator, encoded_audio) catch return Status.err_decode;
     e.lock.lock();
@@ -306,9 +303,9 @@ pub fn load(engine: ?*Engine, data_ptr: ?[*]const u8, data_len: usize, out_sound
     return Status.ok;
 }
 
-pub fn createGroup(engine: ?*Engine, name_ptr: ?[*]const u8, name_len: usize, out_group_id: ?*u32) i32 {
-    if (engine == null or name_ptr == null or out_group_id == null) return Status.err_invalid;
-    const e = engine.?;
+pub fn createGroup(engine: *Engine, name_ptr: ?[*]const u8, name_len: usize, out_group_id: ?*u32) i32 {
+    if (name_ptr == null or out_group_id == null) return Status.err_invalid;
+    const e = engine;
     const name = @as([*]const u8, @ptrCast(name_ptr.?))[0..name_len];
 
     e.lock.lock();
@@ -333,9 +330,9 @@ pub fn createGroup(engine: ?*Engine, name_ptr: ?[*]const u8, name_len: usize, ou
     return Status.ok;
 }
 
-pub fn play(engine: ?*Engine, sound_id: u32, options_ptr: ?*const VoiceOptions, out_voice_id: ?*u32) i32 {
-    if (engine == null or out_voice_id == null) return Status.err_invalid;
-    const e = engine.?;
+pub fn play(engine: *Engine, sound_id: u32, options_ptr: ?*const VoiceOptions, out_voice_id: ?*u32) i32 {
+    if (out_voice_id == null) return Status.err_invalid;
+    const e = engine;
     e.lock.lock();
     defer e.lock.unlock();
     if (sound_id == 0 or sound_id > @as(u32, @intCast(e.sounds.items.len))) return Status.err_not_found;
@@ -370,9 +367,9 @@ pub fn play(engine: ?*Engine, sound_id: u32, options_ptr: ?*const VoiceOptions, 
     return Status.err_no_space;
 }
 
-pub fn stopVoice(engine: ?*Engine, voice_id: u32) i32 {
-    if (engine == null or voice_id == 0) return Status.err_invalid;
-    const e = engine.?;
+pub fn stopVoice(engine: *Engine, voice_id: u32) i32 {
+    if (voice_id == 0) return Status.err_invalid;
+    const e = engine;
     e.lock.lock();
     defer e.lock.unlock();
     const idx: usize = @intCast(voice_id - 1);
@@ -382,9 +379,9 @@ pub fn stopVoice(engine: ?*Engine, voice_id: u32) i32 {
     return Status.ok;
 }
 
-pub fn setVoiceGroup(engine: ?*Engine, voice_id: u32, group_id: u32) i32 {
-    if (engine == null or voice_id == 0) return Status.err_invalid;
-    const e = engine.?;
+pub fn setVoiceGroup(engine: *Engine, voice_id: u32, group_id: u32) i32 {
+    if (voice_id == 0) return Status.err_invalid;
+    const e = engine;
     e.lock.lock();
     defer e.lock.unlock();
 
@@ -397,9 +394,8 @@ pub fn setVoiceGroup(engine: ?*Engine, voice_id: u32, group_id: u32) i32 {
     return Status.ok;
 }
 
-pub fn setGroupVolume(engine: ?*Engine, group_id: u32, volume: f32) i32 {
-    if (engine == null) return Status.err_invalid;
-    const e = engine.?;
+pub fn setGroupVolume(engine: *Engine, group_id: u32, volume: f32) i32 {
+    const e = engine;
     e.lock.lock();
     defer e.lock.unlock();
 
@@ -409,9 +405,8 @@ pub fn setGroupVolume(engine: ?*Engine, group_id: u32, volume: f32) i32 {
     return Status.ok;
 }
 
-pub fn setMasterVolume(engine: ?*Engine, volume: f32) i32 {
-    if (engine == null) return Status.err_invalid;
-    const e = engine.?;
+pub fn setMasterVolume(engine: *Engine, volume: f32) i32 {
+    const e = engine;
     e.lock.lock();
     defer e.lock.unlock();
     e.master_volume = clamp(volume, 0, 4);
@@ -529,11 +524,11 @@ fn audioCallback(device_ptr: ?*c.ma_device, output_ptr: ?*anyopaque, input_ptr: 
     _ = mixLocked(engine, out, @intCast(frame_count), output_channels, engine.started);
 }
 
-pub fn mixToBuffer(engine: ?*Engine, out_ptr: ?[*]f32, frame_count: u32, channels: u8) i32 {
-    if (engine == null or out_ptr == null) return Status.err_invalid;
+pub fn mixToBuffer(engine: *Engine, out_ptr: ?[*]f32, frame_count: u32, channels: u8) i32 {
+    if (out_ptr == null) return Status.err_invalid;
     if (channels == 0) return Status.err_invalid;
 
-    const e = engine.?;
+    const e = engine;
     e.lock.lock();
     defer e.lock.unlock();
     const out = @as([*]f32, @ptrCast(out_ptr.?))[0 .. @as(usize, frame_count) * @as(usize, channels)];
@@ -541,9 +536,9 @@ pub fn mixToBuffer(engine: ?*Engine, out_ptr: ?[*]f32, frame_count: u32, channel
     return Status.ok;
 }
 
-pub fn getStats(engine: ?*Engine, out_stats: ?*Stats) i32 {
-    if (engine == null or out_stats == null) return Status.err_invalid;
-    const e = engine.?;
+pub fn getStats(engine: *Engine, out_stats: ?*Stats) i32 {
+    if (out_stats == null) return Status.err_invalid;
+    const e = engine;
     e.lock.lock();
     defer e.lock.unlock();
     e.stats.underruns = loadUnderruns(e);
