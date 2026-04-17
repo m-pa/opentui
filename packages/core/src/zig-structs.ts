@@ -271,7 +271,7 @@ export type AudioStats = {
   soundsLoaded: number
   voicesActive: number
   framesMixed: bigint
-  underruns: number
+  lockMisses: number
   lastPeak: number
   lastRms: number
 }
@@ -287,7 +287,7 @@ export const AudioStatsStruct = defineStruct([
   ["soundsLoaded", "u32"],
   ["voicesActive", "u32"],
   ["framesMixed", "u64"],
-  ["underruns", "u32"],
+  ["lockMisses", "u32"],
   ["lastPeak", "f32"],
   ["lastRms", "f32"],
 ])

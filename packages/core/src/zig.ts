@@ -3853,7 +3853,7 @@ class FFIRenderLib implements RenderLib {
       soundsLoaded: stats.soundsLoaded,
       voicesActive: stats.voicesActive,
       framesMixed: typeof stats.framesMixed === "bigint" ? stats.framesMixed : BigInt(stats.framesMixed),
-      underruns: stats.underruns,
+      lockMisses: stats.lockMisses,
       lastPeak: stats.lastPeak,
       lastRms: stats.lastRms,
     }

@@ -269,7 +269,7 @@ function updateAudioView(): void {
   meterText.content = `Peak ${meterBar(peak)} ${peak.toFixed(3)}\nRMS  ${meterBar(rms)} ${rms.toFixed(3)}`
 
   statsText.content =
-    `sounds=${stats.soundsLoaded} voices=${stats.voicesActive} frames=${stats.framesMixed.toString()} underruns=${stats.underruns}`
+    `sounds=${stats.soundsLoaded} voices=${stats.voicesActive} frames=${stats.framesMixed.toString()} lockMisses=${stats.lockMisses}`
 }
 
 export async function run(renderer: CliRenderer): Promise<void> {
@@ -353,7 +353,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
 
   statsText = new TextRenderable(renderer, {
     id: "native-audio-demo-stats",
-    content: "sounds=0 voices=0 frames=0 underruns=0",
+    content: "sounds=0 voices=0 frames=0 lockMisses=0",
     fg: "#A78BFA",
     height: 1,
     marginTop: 1,

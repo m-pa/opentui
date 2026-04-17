@@ -92,7 +92,7 @@ test("Audio mixes into mono and multichannel output buffers", () => {
   }
 })
 
-test("Audio counts underruns when callback cannot lock engine", async () => {
+test("Audio counts lock misses when callback cannot lock engine", async () => {
   const audio = Audio.create({ autoStart: false })
   instances.push(audio)
 
@@ -103,15 +103,15 @@ test("Audio counts underruns when callback cannot lock engine", async () => {
   audio.start()
   audio.play(sound, { volume: 1, pan: 0, loop: true })
 
-  const initialUnderruns = audio.getStats()?.underruns ?? 0
+  const initialLockMisses = audio.getStats()?.lockMisses ?? 0
   const deadline = Date.now() + 1_500
 
-  while ((audio.getStats()?.underruns ?? 0) === initialUnderruns && Date.now() < deadline) {
+  while ((audio.getStats()?.lockMisses ?? 0) === initialLockMisses && Date.now() < deadline) {
     audio.mixFrames(700_000, 2)
     await Bun.sleep(10)
   }
 
   const finalStats = audio.getStats()
   expect(finalStats).not.toBeNull()
-  expect(finalStats?.underruns ?? 0).toBeGreaterThan(initialUnderruns)
+  expect(finalStats?.lockMisses ?? 0).toBeGreaterThan(initialLockMisses)
 })

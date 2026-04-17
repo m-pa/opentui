@@ -25,7 +25,7 @@ pub const Stats = extern struct {
     sounds_loaded: u32,
     voices_active: u32,
     frames_mixed: u64,
-    underruns: u32,
+    lock_misses: u32,
     last_peak: f32,
     last_rms: f32,
 };
@@ -70,7 +70,7 @@ pub const Engine = struct {
     device: c.ma_device = undefined,
     has_device: bool = false,
     output_channels: u8 = 2,
-    underrun_count: u32 = 0,
+    lock_miss_count: u32 = 0,
 
     pub fn init(allocator: std.mem.Allocator) Engine {
         return .{
@@ -86,14 +86,14 @@ pub const Engine = struct {
                 .sounds_loaded = 0,
                 .voices_active = 0,
                 .frames_mixed = 0,
-                .underruns = 0,
+                .lock_misses = 0,
                 .last_peak = 0,
                 .last_rms = 0,
             },
             .device = undefined,
             .has_device = false,
             .output_channels = 2,
-            .underrun_count = 0,
+            .lock_miss_count = 0,
         };
     }
 
@@ -155,12 +155,12 @@ const DecodedDataSourceFormat = struct {
     sample_rate: u32,
 };
 
-fn incrementUnderruns(engine: *Engine) void {
-    _ = @atomicRmw(u32, &engine.underrun_count, .Add, 1, .monotonic);
+fn incrementLockMisses(engine: *Engine) void {
+    _ = @atomicRmw(u32, &engine.lock_miss_count, .Add, 1, .monotonic);
 }
 
-fn loadUnderruns(engine: *Engine) u32 {
-    return @atomicLoad(u32, &engine.underrun_count, .monotonic);
+fn loadLockMisses(engine: *Engine) u32 {
+    return @atomicLoad(u32, &engine.lock_miss_count, .monotonic);
 }
 
 fn clearVoice(voice: *Voice) void {
@@ -195,6 +195,9 @@ fn getDataSourceFormat(data_source: *c.ma_data_source) !DecodedDataSourceFormat 
     };
 }
 
+// Fast path when data source reports total frame length: seek to frame 0,
+// allocate once for exact sample count, then trim if decoder returns fewer
+// frames than advertised.
 fn decodeSoundKnownLength(allocator: std.mem.Allocator, data_source: *c.ma_data_source, frame_count: c.ma_uint64, channels: u16, sample_rate: u32) !Sound {
     const channel_count: usize = channels;
     const frame_count_usize = std.math.cast(usize, frame_count) orelse return error.OutOfMemory;
@@ -223,6 +226,8 @@ fn decodeSoundKnownLength(allocator: std.mem.Allocator, data_source: *c.ma_data_
     };
 }
 
+// Fallback path when total frame length unknown: read fixed-size chunks
+// until MA_AT_END, then pack all chunks into one flat sample array.
 fn decodeSoundUnknownLength(allocator: std.mem.Allocator, data_source: *c.ma_data_source, channels: u16, sample_rate: u32) !Sound {
     const channel_count: usize = channels;
     const chunk_frames: c.ma_uint64 = 4096;
@@ -307,7 +312,7 @@ fn reapFinishedVoices(engine: *Engine) void {
 
 fn updateStatsFromBuffer(engine: *Engine, out: []const f32, frame_count: u32, channels: u8) void {
     engine.stats.frames_mixed += frame_count;
-    engine.stats.underruns = loadUnderruns(engine);
+    engine.stats.lock_misses = loadLockMisses(engine);
 
     if (frame_count == 0 or channels == 0 or out.len == 0) {
         engine.stats.last_peak = 0;
@@ -646,7 +651,7 @@ fn audioCallback(device_ptr: ?*c.ma_device, output_ptr: ?*anyopaque, input_ptr: 
 
     if (!engine.lock.tryLock()) {
         @memset(out, 0);
-        incrementUnderruns(engine);
+        incrementLockMisses(engine);
         return;
     }
     defer engine.lock.unlock();
@@ -732,7 +737,7 @@ pub fn getStats(engine: *Engine, out_stats: ?*Stats) i32 {
     e.lock.lock();
     defer e.lock.unlock();
 
-    e.stats.underruns = loadUnderruns(e);
+    e.stats.lock_misses = loadLockMisses(e);
     reapFinishedVoices(e);
     out_stats.?.* = e.stats;
     return Status.ok;
