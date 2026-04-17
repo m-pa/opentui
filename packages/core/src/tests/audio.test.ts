@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { Audio } from "../Audio.js"
+import { Audio } from "../audio.js"
 
 const SAMPLE_RATE = 48_000
 
