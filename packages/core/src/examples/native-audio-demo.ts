@@ -50,7 +50,7 @@ let keyHandler: ((event: KeyEvent) => void) | null = null
 
 let audio: Audio | null = null
 let groups: { sfx: AudioGroup; music: AudioGroup; ui: AudioGroup } | null = null
-let sounds: AudioSound[] = []
+let sounds: Array<AudioSound | null> = []
 let musicSound: AudioSound | null = null
 let musicVoice: AudioVoice | null = null
 let masterVolume = 1
@@ -153,6 +153,10 @@ function playBgmVoice(): void {
     loop: true,
     groupId: groups.music,
   })
+  if (!musicVoice) {
+    lastAction = "BGM start failed (output unavailable)"
+    updateHeader()
+  }
 }
 
 function restartBgmVoiceIfPlaying(): void {
@@ -242,14 +246,20 @@ function updateHeader(): void {
 
 function triggerSound(index: number): void {
   if (!groups || !audio || index < 0 || index >= sounds.length) return
+  const sound = sounds[index]
+  if (sound == null) {
+    lastAction = `${PRESETS[index]?.name ?? "Sound"} unavailable`
+    updateHeader()
+    return
+  }
   const preset = PRESETS[index]
-  audio.play(sounds[index], {
+  const voice = audio.play(sound, {
     volume: preset.volume,
     pan: clampPan(presetBasePan(index) + effectsPan + masterPan),
     loop: false,
     groupId: groups[preset.groupName],
   })
-  lastAction = `${preset.name} trigger`
+  lastAction = voice ? `${preset.name} trigger` : `${preset.name} failed (output unavailable)`
   updateHeader()
 }
 
@@ -277,11 +287,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
   renderer.start()
 
   audio = Audio.create({ autoStart: true })
-  groups = {
-    sfx: audio.group("sfx"),
-    music: audio.group("music"),
-    ui: audio.group("ui"),
-  }
+  const sfxGroup = audio.group("sfx")
+  const musicGroup = audio.group("music")
+  const uiGroup = audio.group("ui")
+  groups = sfxGroup != null && musicGroup != null && uiGroup != null ? { sfx: sfxGroup, music: musicGroup, ui: uiGroup } : null
 
   masterVolume = 1
   masterPan = 0
@@ -290,6 +299,10 @@ export async function run(renderer: CliRenderer): Promise<void> {
   bgmVolume = 0.42
   bgmPan = 0
   selectedMixTargetIndex = 0
+
+  if (!audio.isStarted()) {
+    lastAction = "Output unavailable; demo running silent"
+  }
 
   audio.setMasterVolume(masterVolume)
   applyGroupVolumes()
@@ -381,7 +394,7 @@ export async function run(renderer: CliRenderer): Promise<void> {
 
   updateHeader()
 
-  if (musicSound && groups) {
+  if (musicSound && groups && audio.isStarted()) {
     playBgmVoice()
     lastAction = "BGM auto start"
     updateHeader()
@@ -425,7 +438,9 @@ export async function run(renderer: CliRenderer): Promise<void> {
           lastAction = "BGM stop"
         } else {
           playBgmVoice()
-          lastAction = "BGM start"
+          if (musicVoice) {
+            lastAction = "BGM start"
+          }
         }
         updateHeader()
         break
