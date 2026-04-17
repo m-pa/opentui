@@ -5,6 +5,7 @@ import type { AudioStats } from "./zig-structs.js"
 
 export interface AudioSetupOptions {
   autoStart?: boolean
+  noDevice?: boolean
 }
 
 export interface AudioPlayOptions {
@@ -58,6 +59,7 @@ export class Audio extends EventEmitter<AudioEvents> {
   }
 
   private readonly lib: RenderLib
+  private readonly noDevice: boolean
   private engine: Pointer | null = null
   private readonly groups = new Map<string, number>()
   private started = false
@@ -65,6 +67,7 @@ export class Audio extends EventEmitter<AudioEvents> {
   private constructor(lib: RenderLib, options: AudioSetupOptions) {
     super()
     this.lib = lib
+    this.noDevice = options.noDevice ?? false
     this.engine = this.lib.createAudioEngine()
     if (!this.engine) {
       this.emitError("createAudioEngine", undefined, "Audio createAudioEngine returned null")
@@ -89,7 +92,7 @@ export class Audio extends EventEmitter<AudioEvents> {
       this.emitError("start", undefined, "Audio engine unavailable during start")
       return false
     }
-    const status = this.lib.audioStart(engine)
+    const status = this.lib.audioStart(engine, this.noDevice)
     if (status !== 0) {
       this.emitError("start", status)
       return false
@@ -163,11 +166,11 @@ export class Audio extends EventEmitter<AudioEvents> {
   play(sound: AudioSound, options?: AudioPlayOptions): AudioVoice | null {
     const rawOptions = options
       ? {
-          volume: options.volume,
-          pan: options.pan,
-          loop: options.loop,
-          groupId: options.groupId ?? 0,
-        }
+        volume: options.volume,
+        pan: options.pan,
+        loop: options.loop,
+        groupId: options.groupId ?? 0,
+      }
       : undefined
 
     const engine = this.engine

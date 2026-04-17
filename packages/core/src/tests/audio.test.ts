@@ -53,37 +53,51 @@ afterEach(() => {
 })
 
 test("Audio loads wav and mixes frames", () => {
-  const audio = Audio.create({ autoStart: false })
+  const audio = Audio.create({ autoStart: false, noDevice: true })
   instances.push(audio)
 
   const wav = buildMonoPcm16Wav([0, 0.25, -0.25, 0.5, -0.5, 0])
   const sound = audio.loadSound(wav)
   const sfx = audio.group("sfx")
 
-  audio.start()
-  audio.play(sound, { group: sfx, volume: 1, pan: 0, loop: false })
+  expect(sound).not.toBeNull()
+  expect(sfx).not.toBeNull()
+  if (sound == null || sfx == null) return
+
+  expect(audio.start()).toBe(true)
+  const voice = audio.play(sound, { groupId: sfx, volume: 1, pan: 0, loop: false })
+  expect(voice).not.toBeNull()
   const mixed = audio.mixFrames(6, 2)
 
+  expect(mixed).not.toBeNull()
+  if (!mixed) return
   expect(mixed.length).toBe(12)
   expect(mixed.some((sample) => Math.abs(sample) > 0.001)).toBe(true)
   expect(audio.getStats()?.soundsLoaded).toBe(1)
 })
 
 test("Audio mixes into mono and multichannel output buffers", () => {
-  const audio = Audio.create({ autoStart: false })
+  const audio = Audio.create({ autoStart: false, noDevice: true })
   instances.push(audio)
 
   const wav = buildMonoPcm16Wav([0.6, -0.2, 0.4, -0.4, 0.3, -0.1])
   const sound = audio.loadSound(wav)
+  expect(sound).not.toBeNull()
+  if (sound == null) return
 
-  audio.start()
-  audio.play(sound, { volume: 1, pan: 0, loop: true })
+  expect(audio.start()).toBe(true)
+  const voice = audio.play(sound, { volume: 1, pan: 0, loop: true })
+  expect(voice).not.toBeNull()
 
   const mono = audio.mixFrames(6, 1)
+  expect(mono).not.toBeNull()
+  if (!mono) return
   expect(mono.length).toBe(6)
   expect(mono.some((sample) => Math.abs(sample) > 0.001)).toBe(true)
 
   const quad = audio.mixFrames(6, 4)
+  expect(quad).not.toBeNull()
+  if (!quad) return
   expect(quad.length).toBe(24)
   expect(quad.some((sample, index) => index % 4 < 2 && Math.abs(sample) > 0.001)).toBe(true)
   for (let frame = 0; frame < 6; frame += 1) {
@@ -92,26 +106,29 @@ test("Audio mixes into mono and multichannel output buffers", () => {
   }
 })
 
-test("Audio counts lock misses when callback cannot lock engine", async () => {
-  const audio = Audio.create({ autoStart: false })
+test("Audio updates mix stats in no-device mode", () => {
+  const audio = Audio.create({ autoStart: false, noDevice: true })
   instances.push(audio)
 
   const wave = Array.from({ length: 2048 }, (_, index) => Math.sin((Math.PI * 2 * index) / 32) * 0.8)
   const wav = buildMonoPcm16Wav(wave)
   const sound = audio.loadSound(wav)
+  expect(sound).not.toBeNull()
+  if (sound == null) return
 
-  audio.start()
-  audio.play(sound, { volume: 1, pan: 0, loop: true })
+  expect(audio.start()).toBe(true)
+  const voice = audio.play(sound, { volume: 1, pan: 0, loop: true })
+  expect(voice).not.toBeNull()
 
-  const initialLockMisses = audio.getStats()?.lockMisses ?? 0
-  const deadline = Date.now() + 1_500
+  const initialStats = audio.getStats()
+  expect(initialStats).not.toBeNull()
+  const initialFrames = initialStats?.framesMixed ?? 0n
 
-  while ((audio.getStats()?.lockMisses ?? 0) === initialLockMisses && Date.now() < deadline) {
-    audio.mixFrames(700_000, 2)
-    await Bun.sleep(10)
-  }
+  const mixed = audio.mixFrames(512, 2)
+  expect(mixed).not.toBeNull()
 
   const finalStats = audio.getStats()
   expect(finalStats).not.toBeNull()
-  expect(finalStats?.lockMisses ?? 0).toBeGreaterThan(initialLockMisses)
+  expect(finalStats?.framesMixed ?? 0n).toBeGreaterThan(initialFrames)
+  expect(finalStats?.voicesActive ?? 0).toBeGreaterThan(0)
 })

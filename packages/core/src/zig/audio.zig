@@ -376,9 +376,15 @@ pub fn destroy(engine: *Engine) void {
     e.allocator.destroy(e);
 }
 
-pub fn start(engine: *Engine) i32 {
+// NOTE: no_device flag for test decoupling, can be removed with device selection support
+pub fn start(engine: *Engine, no_device: bool) i32 {
     const e = engine;
     if (e.started) return Status.ok;
+
+    if (no_device) {
+        e.started = true;
+        return Status.ok;
+    }
 
     if (!e.has_device) {
         var config = c.ma_device_config_init(c.ma_device_type_playback);

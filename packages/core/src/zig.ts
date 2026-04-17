@@ -1098,7 +1098,7 @@ function getOpenTUILib(libPath?: string) {
       returns: "void",
     },
     audioStart: {
-      args: ["ptr"],
+      args: ["ptr", "bool"],
       returns: "i32",
     },
     audioStop: {
@@ -1438,7 +1438,7 @@ export type NativeSpanFeedEventHandler = (eventId: number, arg0: Pointer, arg1: 
 export interface AudioEngineLib {
   createAudioEngine: () => Pointer | null
   destroyAudioEngine: (engine: Pointer) => void
-  audioStart: (engine: Pointer) => number
+  audioStart: (engine: Pointer, noDevice: boolean) => number
   audioStop: (engine: Pointer) => number
   audioLoad: (engine: Pointer, data: Uint8Array) => { status: number; soundId: number | null }
   audioPlay: (engine: Pointer, soundId: number, options?: AudioVoiceOptions) => { status: number; voiceId: number | null }
@@ -3782,8 +3782,8 @@ class FFIRenderLib implements RenderLib {
     this.opentui.symbols.destroyAudioEngine(engine)
   }
 
-  public audioStart(engine: Pointer): number {
-    return this.opentui.symbols.audioStart(engine)
+  public audioStart(engine: Pointer, noDevice: boolean): number {
+    return this.opentui.symbols.audioStart(engine, noDevice)
   }
 
   public audioStop(engine: Pointer): number {

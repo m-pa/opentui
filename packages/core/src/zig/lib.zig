@@ -169,8 +169,8 @@ export fn destroyAudioEngine(engine: *native_audio.Engine) void {
     native_audio.destroy(engine);
 }
 
-export fn audioStart(engine: *native_audio.Engine) i32 {
-    return native_audio.start(engine);
+export fn audioStart(engine: *native_audio.Engine, no_device: bool) i32 {
+    return native_audio.start(engine, no_device);
 }
 
 export fn audioStop(engine: *native_audio.Engine) i32 {
