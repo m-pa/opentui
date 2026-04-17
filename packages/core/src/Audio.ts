@@ -1,4 +1,5 @@
 import type { Pointer } from "bun:ffi"
+import { EventEmitter } from "events"
 import { resolveRenderLib, type RenderLib } from "./zig.js"
 import type { AudioStats } from "./zig-structs.js"
 
@@ -17,6 +18,32 @@ export type AudioGroup = number
 export type AudioVoice = number
 export type AudioSound = number
 
+export type AudioAction =
+  | "createAudioEngine"
+  | "start"
+  | "stop"
+  | "loadSound"
+  | "group"
+  | "play"
+  | "stopVoice"
+  | "setVoiceGroup"
+  | "setGroupVolume"
+  | "setMasterVolume"
+  | "mixFrames"
+  | "getStats"
+
+export interface AudioErrorContext {
+  action: AudioAction
+  status?: number
+}
+
+export interface AudioEvents {
+  error: [error: Error, context: AudioErrorContext]
+  started: []
+  stopped: []
+  disposed: []
+}
+
 function statusToError(action: string, status: number): Error {
   return new Error(`Audio ${action} failed: ${status}`)
 }
@@ -25,7 +52,7 @@ function toBytes(data: Uint8Array | ArrayBuffer): Uint8Array {
   return data instanceof Uint8Array ? data : new Uint8Array(data)
 }
 
-export class Audio {
+export class Audio extends EventEmitter<AudioEvents> {
   static create(options: AudioSetupOptions = {}): Audio {
     return new Audio(resolveRenderLib(), options)
   }
@@ -36,10 +63,12 @@ export class Audio {
   private started = false
 
   private constructor(lib: RenderLib, options: AudioSetupOptions) {
+    super()
     this.lib = lib
     this.engine = this.lib.createAudioEngine()
     if (!this.engine) {
-      throw new Error("Audio createAudioEngine returned null")
+      this.emitError("createAudioEngine", undefined, "Audio createAudioEngine returned null")
+      return
     }
 
     if (options.autoStart ?? true) {
@@ -47,65 +76,91 @@ export class Audio {
     }
   }
 
-  start(): void {
-    if (this.started) return
-    const engine = this.engine
-    if (!engine) throw new Error("Audio engine unavailable during start")
-    const status = this.lib.audioStart(engine)
-    if (status !== 0) {
-      throw statusToError("start", status)
-    }
-    this.started = true
+  private emitError(action: AudioAction, status?: number, message?: string): void {
+    if (this.listenerCount("error") === 0) return
+    const error = message ? new Error(message) : statusToError(action, status ?? -1)
+    this.emit("error", error, { action, status })
   }
 
-  stop(): void {
-    if (!this.started) return
+  start(): boolean {
+    if (this.started) return true
     const engine = this.engine
-    if (!engine) throw new Error("Audio engine unavailable during stop")
+    if (!engine) {
+      this.emitError("start", undefined, "Audio engine unavailable during start")
+      return false
+    }
+    const status = this.lib.audioStart(engine)
+    if (status !== 0) {
+      this.emitError("start", status)
+      return false
+    }
+    this.started = true
+    this.emit("started")
+    return true
+  }
+
+  stop(): boolean {
+    if (!this.started) return true
+    const engine = this.engine
+    if (!engine) {
+      this.emitError("stop", undefined, "Audio engine unavailable during stop")
+      return false
+    }
     const status = this.lib.audioStop(engine)
     if (status !== 0) {
-      throw statusToError("stop", status)
+      this.emitError("stop", status)
+      return false
     }
     this.started = false
+    this.emit("stopped")
+    return true
   }
 
   isStarted(): boolean {
     return this.started
   }
 
-  loadSound(data: Uint8Array | ArrayBuffer): AudioSound {
+  loadSound(data: Uint8Array | ArrayBuffer): AudioSound | null {
     const engine = this.engine
-    if (!engine) throw new Error("Audio engine unavailable during loadSound")
+    if (!engine) {
+      this.emitError("loadSound", undefined, "Audio engine unavailable during loadSound")
+      return null
+    }
     const result = this.lib.audioLoad(engine, toBytes(data))
     if (result.status !== 0 || result.soundId == null) {
-      throw statusToError("loadSound", result.status)
+      this.emitError("loadSound", result.status)
+      return null
     }
     return result.soundId
   }
 
-  async loadSoundFile(filePath: string): Promise<AudioSound> {
+  async loadSoundFile(filePath: string): Promise<AudioSound | null> {
     const bytes = await Bun.file(filePath).arrayBuffer()
     return this.loadSound(bytes)
   }
 
-  group(name: string): AudioGroup {
+  group(name: string): AudioGroup | null {
     const existing = this.groups.get(name)
     if (existing != null) {
       return existing
     }
 
     const engine = this.engine
-    if (!engine) throw new Error("Audio engine unavailable during group")
+    if (!engine) {
+      this.emitError("group", undefined, "Audio engine unavailable during group")
+      return null
+    }
     const result = this.lib.audioCreateGroup(engine, name)
     if (result.status !== 0 || result.groupId == null) {
-      throw statusToError("group", result.status)
+      this.emitError("group", result.status)
+      return null
     }
 
     this.groups.set(name, result.groupId)
     return result.groupId
   }
 
-  play(sound: AudioSound, options?: AudioPlayOptions): AudioVoice {
+  play(sound: AudioSound, options?: AudioPlayOptions): AudioVoice | null {
     const rawOptions = options
       ? {
           volume: options.volume,
@@ -116,65 +171,96 @@ export class Audio {
       : undefined
 
     const engine = this.engine
-    if (!engine) throw new Error("Audio engine unavailable during play")
+    if (!engine) {
+      this.emitError("play", undefined, "Audio engine unavailable during play")
+      return null
+    }
     const result = this.lib.audioPlay(engine, sound, rawOptions)
     if (result.status !== 0 || result.voiceId == null) {
-      throw statusToError("play", result.status)
+      this.emitError("play", result.status)
+      return null
     }
 
     return result.voiceId
   }
 
-  stopVoice(voice: AudioVoice): void {
+  stopVoice(voice: AudioVoice): boolean {
     const engine = this.engine
-    if (!engine) throw new Error("Audio engine unavailable during stopVoice")
+    if (!engine) {
+      this.emitError("stopVoice", undefined, "Audio engine unavailable during stopVoice")
+      return false
+    }
     const status = this.lib.audioStopVoice(engine, voice)
     if (status !== 0) {
-      throw statusToError("stopVoice", status)
+      this.emitError("stopVoice", status)
+      return false
     }
+    return true
   }
 
-  setVoiceGroup(voice: AudioVoice, group: AudioGroup): void {
+  setVoiceGroup(voice: AudioVoice, group: AudioGroup): boolean {
     const engine = this.engine
-    if (!engine) throw new Error("Audio engine unavailable during setVoiceGroup")
+    if (!engine) {
+      this.emitError("setVoiceGroup", undefined, "Audio engine unavailable during setVoiceGroup")
+      return false
+    }
     const status = this.lib.audioSetVoiceGroup(engine, voice, group)
     if (status !== 0) {
-      throw statusToError("setVoiceGroup", status)
+      this.emitError("setVoiceGroup", status)
+      return false
     }
+    return true
   }
 
-  setGroupVolume(group: AudioGroup, volume: number): void {
+  setGroupVolume(group: AudioGroup, volume: number): boolean {
     const engine = this.engine
-    if (!engine) throw new Error("Audio engine unavailable during setGroupVolume")
+    if (!engine) {
+      this.emitError("setGroupVolume", undefined, "Audio engine unavailable during setGroupVolume")
+      return false
+    }
     const status = this.lib.audioSetGroupVolume(engine, group, volume)
     if (status !== 0) {
-      throw statusToError("setGroupVolume", status)
+      this.emitError("setGroupVolume", status)
+      return false
     }
+    return true
   }
 
-  setMasterVolume(volume: number): void {
+  setMasterVolume(volume: number): boolean {
     const engine = this.engine
-    if (!engine) throw new Error("Audio engine unavailable during setMasterVolume")
+    if (!engine) {
+      this.emitError("setMasterVolume", undefined, "Audio engine unavailable during setMasterVolume")
+      return false
+    }
     const status = this.lib.audioSetMasterVolume(engine, volume)
     if (status !== 0) {
-      throw statusToError("setMasterVolume", status)
+      this.emitError("setMasterVolume", status)
+      return false
     }
+    return true
   }
 
-  mixFrames(frameCount: number, channels: number = 2): Float32Array {
+  mixFrames(frameCount: number, channels: number = 2): Float32Array | null {
     const engine = this.engine
-    if (!engine) throw new Error("Audio engine unavailable during mixFrames")
+    if (!engine) {
+      this.emitError("mixFrames", undefined, "Audio engine unavailable during mixFrames")
+      return null
+    }
     const output = new Float32Array(frameCount * channels)
     const status = this.lib.audioMixToBuffer(engine, output, frameCount, channels)
     if (status !== 0) {
-      throw statusToError("mixFrames", status)
+      this.emitError("mixFrames", status)
+      return null
     }
     return output
   }
 
   getStats(): AudioStats | null {
     const engine = this.engine
-    if (!engine) throw new Error("Audio engine unavailable during getStats")
+    if (!engine) {
+      this.emitError("getStats", undefined, "Audio engine unavailable during getStats")
+      return null
+    }
     return this.lib.audioGetStats(engine)
   }
 
@@ -186,6 +272,7 @@ export class Audio {
     this.groups.clear()
     this.lib.destroyAudioEngine(this.engine)
     this.engine = null
+    this.emit("disposed")
   }
 }
 
