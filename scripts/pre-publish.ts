@@ -48,6 +48,12 @@ const ALL_PACKAGES: PackageConfig[] = [
     distDir: join(rootDir, "packages", "solid", "dist"),
     requiresCore: true,
   },
+  {
+    name: "@opentui/keymap",
+    rootDir: join(rootDir, "packages", "keymap"),
+    distDir: join(rootDir, "packages", "keymap", "dist"),
+    requiresCore: true,
+  },
 ]
 
 const PACKAGES = ALL_PACKAGES

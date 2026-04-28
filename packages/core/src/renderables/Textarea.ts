@@ -8,10 +8,9 @@ import {
   mergeKeyBindings,
   buildKeyBindingsMap,
   getKeyBindingAction,
-  type KeyAliasMap,
   defaultKeyAliases,
   mergeKeyAliases,
-} from "../lib/keymapping.js"
+} from "../lib/keybinding.internal.js"
 import { type StyledText, fg } from "../lib/styled-text.js"
 import type { ExtmarksController } from "../lib/extmarks.js"
 
@@ -54,8 +53,9 @@ export type TextareaAction =
   | "submit"
 
 export type KeyBinding = BaseKeyBinding<TextareaAction>
+export type TextareaKeyAliasMap = Record<string, string>
 
-const defaultTextareaKeybindings: KeyBinding[] = [
+export const defaultTextareaKeyBindings: KeyBinding[] = [
   { name: "left", action: "move-left" },
   { name: "right", action: "move-right" },
   { name: "up", action: "move-up" },
@@ -136,7 +136,7 @@ export interface TextareaOptions extends EditBufferOptions {
   placeholder?: StyledText | string | null
   placeholderColor?: ColorInput
   keyBindings?: KeyBinding[]
-  keyAliasMap?: KeyAliasMap
+  keyAliasMap?: TextareaKeyAliasMap
   onSubmit?: (event: SubmitEvent) => void
 }
 
@@ -148,7 +148,7 @@ export class TextareaRenderable extends EditBufferRenderable {
   private _focusedBackgroundColor: RGBA
   private _focusedTextColor: RGBA
   private _keyBindingsMap: Map<string, TextareaAction>
-  private _keyAliasMap: KeyAliasMap
+  private _keyAliasMap: TextareaKeyAliasMap
   private _keyBindings: KeyBinding[]
   private _actionHandlers: Map<TextareaAction, () => boolean>
   private _initialValueSet: boolean = false
@@ -186,7 +186,7 @@ export class TextareaRenderable extends EditBufferRenderable {
 
     this._keyAliasMap = mergeKeyAliases(defaultKeyAliases, options.keyAliasMap || {})
     this._keyBindings = options.keyBindings || []
-    const mergedBindings = mergeKeyBindings(defaultTextareaKeybindings, this._keyBindings)
+    const mergedBindings = mergeKeyBindings(defaultTextareaKeyBindings, this._keyBindings)
     this._keyBindingsMap = buildKeyBindingsMap(mergedBindings, this._keyAliasMap)
     this._actionHandlers = this.buildActionHandlers()
     this._submitListener = options.onSubmit
@@ -261,12 +261,14 @@ export class TextareaRenderable extends EditBufferRenderable {
   }
 
   public handleKeyPress(key: KeyEvent): boolean {
-    const action = getKeyBindingAction(this._keyBindingsMap, key)
+    if (this.traits.suspend !== true) {
+      const action = getKeyBindingAction(this._keyBindingsMap, key)
 
-    if (action) {
-      const handler = this._actionHandlers.get(action)
-      if (handler) {
-        return handler()
+      if (action) {
+        const handler = this._actionHandlers.get(action)
+        if (handler) {
+          return handler()
+        }
       }
     }
 
@@ -405,13 +407,13 @@ export class TextareaRenderable extends EditBufferRenderable {
 
   public set keyBindings(bindings: KeyBinding[]) {
     this._keyBindings = bindings
-    const mergedBindings = mergeKeyBindings(defaultTextareaKeybindings, bindings)
+    const mergedBindings = mergeKeyBindings(defaultTextareaKeyBindings, bindings)
     this._keyBindingsMap = buildKeyBindingsMap(mergedBindings, this._keyAliasMap)
   }
 
-  public set keyAliasMap(aliases: KeyAliasMap) {
+  public set keyAliasMap(aliases: TextareaKeyAliasMap) {
     this._keyAliasMap = mergeKeyAliases(defaultKeyAliases, aliases)
-    const mergedBindings = mergeKeyBindings(defaultTextareaKeybindings, this._keyBindings)
+    const mergedBindings = mergeKeyBindings(defaultTextareaKeyBindings, this._keyBindings)
     this._keyBindingsMap = buildKeyBindingsMap(mergedBindings, this._keyAliasMap)
   }
 
