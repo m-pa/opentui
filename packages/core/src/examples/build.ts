@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { mkdirSync } from "node:fs"
+import { existsSync, mkdirSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -9,6 +9,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const rootDir = join(__dirname, "..", "..")
 const examplesDir = join(rootDir, "src", "examples")
+const usePrebuiltArtifacts = process.env.OPENTUI_EXAMPLES_USE_PREBUILT_ARTIFACTS === "true"
 
 // Supported platforms and architectures based on bun-webgpu and opentui native binaries
 const targets = [
@@ -28,6 +29,11 @@ mkdirSync(distDir, { recursive: true })
 const packageJson = JSON.parse(await readFile(join(rootDir, "package.json"), "utf8"))
 const version = packageJson.version
 
+function getNativePackageDir(platform: string, arch: string): string {
+  const packagePlatform = platform === "windows" ? "win32" : platform
+  return join(rootDir, "node_modules", "@opentui", `core-${packagePlatform}-${arch}`)
+}
+
 // Install bun-webgpu for all platforms to ensure cross-compilation works
 console.log("Installing bun-webgpu for all platforms...")
 const bunWebgpuVersion = packageJson.optionalDependencies?.["bun-webgpu"]
@@ -36,9 +42,23 @@ if (!bunWebgpuVersion) {
 }
 await Bun.$`bun install --os="*" --cpu="*" bun-webgpu@${bunWebgpuVersion}`
 console.log(`✅ bun-webgpu@${bunWebgpuVersion} installed for all platforms`)
-console.log("Building local native opentui packages for all platforms...")
-await Bun.$`bun ${join(rootDir, "scripts", "build.ts")} --native --all`
-console.log("✅ Local native opentui packages refreshed")
+
+if (usePrebuiltArtifacts) {
+  console.log("Using prebuilt native opentui packages from CI artifacts...")
+
+  for (const { platform, arch } of targets) {
+    const packageDir = getNativePackageDir(platform, arch)
+    if (!existsSync(packageDir)) {
+      throw new Error(`Missing prebuilt native package for ${platform}-${arch}: ${packageDir}`)
+    }
+  }
+
+  console.log("✅ Prebuilt native opentui packages verified")
+} else {
+  console.log("Building local native opentui packages for all platforms...")
+  await Bun.$`bun ${join(rootDir, "scripts", "build.ts")} --native --all`
+  console.log("✅ Local native opentui packages refreshed")
+}
 console.log()
 
 console.log(`Building examples executable for all platforms...`)

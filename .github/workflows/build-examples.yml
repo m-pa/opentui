@@ -115,6 +115,8 @@ jobs:
           echo "✅ bun-webgpu ready for bundling"
 
       - name: Build examples
+        env:
+          OPENTUI_EXAMPLES_USE_PREBUILT_ARTIFACTS: "true"
         run: |
           set -e
           cd packages/core
