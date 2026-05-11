@@ -5,7 +5,7 @@ They are included in the repository to avoid downloading them every time the pro
 
 ## Asset Management
 
-Parser definitions are configured in `../parsers-config.json`:
+Parser definitions are configured in `../parsers-config.ts` for OpenTUI's built-in parser set.
 
 ### Update Script
 
@@ -114,5 +114,6 @@ For more information about using Tree-Sitter in your application, see the [Tree-
 
 To add a new default parser to OpenTUI Core:
 
-1. **Update Configuration**: Add the new parser to `../parsers-config.json`
+1. **Update Configuration**: Add the new parser to `../parsers-config.ts`
 2. **Run Update Script**: Execute `bun update.ts` to download assets and regenerate imports
+3. **Commit Generated Assets**: Include the downloaded parser/query files and regenerated `../default-parsers.ts`

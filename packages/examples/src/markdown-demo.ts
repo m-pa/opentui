@@ -24,6 +24,60 @@ Welcome to the **MarkdownRenderable** showcase! This demonstrates automatic tabl
 - Proper handling of \`inline code\`, **bold**, and *italic* in tables
 - Multiple syntax themes to choose from
 - Conceal mode hides formatting markers
+- Top-level document layout for assistant-style prose, tables, quotes, and code fences
+
+## Renderer Stress Cases
+
+### Interleaved Code
+
+Start with a short conclusion before any code appears.
+
+\`\`\`ts
+export function parse(input: string) {
+  return input.trim().split(/\\s+/)
+}
+\`\`\`
+
+Then continue with prose immediately after the code block. This should not inherit code styling or indentation.
+
+\`\`\`tsx
+<Show when={props.enabled}>
+  <markdown content={props.text} streaming />
+</Show>
+\`\`\`
+
+Final paragraph after a second fence with \`inline code\`, **bold text**, and _emphasis_ mixed together.
+
+### Lists With Code
+
+1. First ordered item with \`inline code\`.
+2. Second ordered item before a nested list:
+   - Nested bullet with a long phrase that should wrap without swallowing the marker or changing indentation.
+   - Nested bullet before fenced code:
+
+     \`\`\`ts
+     const nested = true
+     \`\`\`
+
+3. Third ordered item after the nested fence.
+
+### Quote, Table, Diff
+
+> Quoted note after the list. It should preserve quote styling while using the renderer's blockquote marker.
+
+| Feature | Stress |
+| --- | --- |
+| Markdown | prose/code/table interleave |
+| Renderer | wrapping and spacing |
+
+\`\`\`diff
+- const renderer = oldMarkdown
++ const renderer = experimentalMarkdown
+\`\`\`
+
+Final paragraph with [docs](https://opentui.dev) and \`https://example.com/from-code\`.
+
+---
 
 ## Comparison Table
 
@@ -179,7 +233,7 @@ const themes = {
       "punctuation.bracket": { fg: parseColor("#24292F") },
       "punctuation.delimiter": { fg: parseColor("#57606A") },
       "markup.heading": { fg: parseColor("#0550AE"), bold: true },
-      "markup.heading.1": { fg: parseColor("#1A7F37"), bold: true, underline: true },
+      "markup.heading.1": { fg: parseColor("#1A7F37"), bold: true, italic: true, underline: true },
       "markup.heading.2": { fg: parseColor("#0550AE"), bold: true },
       "markup.heading.3": { fg: parseColor("#8250DF") },
       "markup.bold": { fg: parseColor("#24292F"), bold: true },
@@ -193,6 +247,8 @@ const themes = {
       "markup.link": { fg: parseColor("#0969DA"), underline: true },
       "markup.link.label": { fg: parseColor("#0A3069"), underline: true },
       "markup.link.url": { fg: parseColor("#0969DA"), underline: true },
+      "diff.plus": { fg: parseColor("#1A7F37") },
+      "diff.minus": { fg: parseColor("#CF222E") },
       label: { fg: parseColor("#1A7F37") },
       conceal: { fg: parseColor("#6E7781") },
       "punctuation.special": { fg: parseColor("#57606A") },
@@ -215,7 +271,7 @@ const themes = {
       "punctuation.bracket": { fg: parseColor("#F0F6FC") },
       "punctuation.delimiter": { fg: parseColor("#C9D1D9") },
       "markup.heading": { fg: parseColor("#58A6FF"), bold: true },
-      "markup.heading.1": { fg: parseColor("#00FF88"), bold: true, underline: true },
+      "markup.heading.1": { fg: parseColor("#00FF88"), bold: true, italic: true, underline: true },
       "markup.heading.2": { fg: parseColor("#00D7FF"), bold: true },
       "markup.heading.3": { fg: parseColor("#FF69B4") },
       "markup.bold": { fg: parseColor("#F0F6FC"), bold: true },
@@ -229,6 +285,8 @@ const themes = {
       "markup.link": { fg: parseColor("#58A6FF"), underline: true },
       "markup.link.label": { fg: parseColor("#A5D6FF"), underline: true },
       "markup.link.url": { fg: parseColor("#58A6FF"), underline: true },
+      "diff.plus": { fg: parseColor("#3FB950") },
+      "diff.minus": { fg: parseColor("#F85149") },
       label: { fg: parseColor("#7EE787") },
       conceal: { fg: parseColor("#6E7681") },
       "punctuation.special": { fg: parseColor("#8B949E") },
@@ -251,7 +309,7 @@ const themes = {
       "punctuation.bracket": { fg: parseColor("#F8F8F2") },
       "punctuation.delimiter": { fg: parseColor("#F8F8F2") },
       "markup.heading": { fg: parseColor("#A6E22E"), bold: true },
-      "markup.heading.1": { fg: parseColor("#F92672"), bold: true, underline: true },
+      "markup.heading.1": { fg: parseColor("#F92672"), bold: true, italic: true, underline: true },
       "markup.heading.2": { fg: parseColor("#66D9EF"), bold: true },
       "markup.heading.3": { fg: parseColor("#E6DB74") },
       "markup.bold": { fg: parseColor("#F8F8F2"), bold: true },
@@ -265,6 +323,8 @@ const themes = {
       "markup.link": { fg: parseColor("#66D9EF"), underline: true },
       "markup.link.label": { fg: parseColor("#E6DB74"), underline: true },
       "markup.link.url": { fg: parseColor("#66D9EF"), underline: true },
+      "diff.plus": { fg: parseColor("#A6E22E") },
+      "diff.minus": { fg: parseColor("#F92672") },
       label: { fg: parseColor("#A6E22E") },
       conceal: { fg: parseColor("#75715E") },
       "punctuation.special": { fg: parseColor("#75715E") },
@@ -287,7 +347,7 @@ const themes = {
       "punctuation.bracket": { fg: parseColor("#ECEFF4") },
       "punctuation.delimiter": { fg: parseColor("#D8DEE9") },
       "markup.heading": { fg: parseColor("#88C0D0"), bold: true },
-      "markup.heading.1": { fg: parseColor("#8FBCBB"), bold: true, underline: true },
+      "markup.heading.1": { fg: parseColor("#8FBCBB"), bold: true, italic: true, underline: true },
       "markup.heading.2": { fg: parseColor("#81A1C1"), bold: true },
       "markup.heading.3": { fg: parseColor("#B48EAD") },
       "markup.bold": { fg: parseColor("#ECEFF4"), bold: true },
@@ -301,6 +361,8 @@ const themes = {
       "markup.link": { fg: parseColor("#88C0D0"), underline: true },
       "markup.link.label": { fg: parseColor("#A3BE8C"), underline: true },
       "markup.link.url": { fg: parseColor("#88C0D0"), underline: true },
+      "diff.plus": { fg: parseColor("#A3BE8C") },
+      "diff.minus": { fg: parseColor("#BF616A") },
       label: { fg: parseColor("#A3BE8C") },
       conceal: { fg: parseColor("#4C566A") },
       "punctuation.special": { fg: parseColor("#616E88") },
@@ -345,13 +407,19 @@ const JSON_PARSER_WASM_URL =
   "https://github.com/tree-sitter/tree-sitter-json/releases/download/v0.24.8/tree-sitter-json.wasm"
 const JSON_HIGHLIGHTS_QUERY_URL =
   "https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/json/highlights.scm"
+const DIFF_PARSER_WASM_URL =
+  "https://github.com/tree-sitter-grammars/tree-sitter-diff/releases/download/v0.1.0/tree-sitter-diff.wasm"
+const DIFF_HIGHLIGHTS_QUERY_URL =
+  "https://raw.githubusercontent.com/tree-sitter-grammars/tree-sitter-diff/master/queries/highlights.scm"
 
-let jsonParserRegistered = false
+let demoParsersRegistered = false
 
-function registerJsonParserForDemo(): void {
-  if (jsonParserRegistered) return
+function registerTreeSitterParsersForDemo(): void {
+  if (demoParsersRegistered) return
 
-  getTreeSitterClient().addFiletypeParser({
+  const treeSitterClient = getTreeSitterClient()
+
+  treeSitterClient.addFiletypeParser({
     filetype: "json",
     wasm: JSON_PARSER_WASM_URL,
     queries: {
@@ -359,7 +427,15 @@ function registerJsonParserForDemo(): void {
     },
   })
 
-  jsonParserRegistered = true
+  treeSitterClient.addFiletypeParser({
+    filetype: "diff",
+    wasm: DIFF_PARSER_WASM_URL,
+    queries: {
+      highlights: [DIFF_HIGHLIGHTS_QUERY_URL],
+    },
+  })
+
+  demoParsersRegistered = true
 }
 
 function getCurrentTheme() {
@@ -469,7 +545,7 @@ export async function run(rendererInstance: CliRenderer): Promise<void> {
   rendererInstance.on(CliRenderEvents.DESTROY, rendererDestroyHandler)
 
   renderer.start()
-  registerJsonParserForDemo()
+  registerTreeSitterParsersForDemo()
 
   const theme = getCurrentTheme()
   renderer.setBackgroundColor(theme.bg)
@@ -558,7 +634,8 @@ Other:
     scrollX: false,
     flexGrow: 1,
     flexShrink: 1,
-    padding: 2,
+    paddingX: 2,
+    paddingY: 1,
   })
   markdownScrollBox.focus()
   parentContainer.add(markdownScrollBox)
@@ -574,6 +651,8 @@ Other:
     fg: getThemeTextColor(theme),
     bg: theme.bg,
     conceal: concealEnabled,
+    internalBlockMode: "top-level",
+    tableOptions: { style: "grid", widthMode: "content", cellPaddingX: 1 },
     width: "100%",
   })
 

@@ -7,6 +7,7 @@ import type { BorderStyle } from "../lib/border.js"
 import { RGBA, parseColor, type ColorInput } from "../lib/RGBA.js"
 import { type MarkedToken, type Token, type Tokens } from "marked"
 import { CodeRenderable, type OnChunksCallback } from "./Code.js"
+import { BoxRenderable } from "./Box.js"
 import {
   TextTableRenderable,
   type TextTableCellContent,
@@ -49,6 +50,14 @@ export interface MarkdownTableOptions {
    * Padding applied on all sides of each table cell.
    */
   cellPadding?: number
+  /**
+   * Horizontal padding applied on the left and right of each table cell.
+   */
+  cellPaddingX?: number
+  /**
+   * Vertical padding applied above and below each table cell.
+   */
+  cellPaddingY?: number
   /**
    * Enables/disables table border rendering.
    */
@@ -131,6 +140,8 @@ interface ResolvedTableRenderableOptions {
   columnFitter: TextTableColumnFitter
   wrapMode: "none" | "char" | "word"
   cellPadding: number
+  cellPaddingX: number
+  cellPaddingY: number
   columnGap: number
   border: boolean
   outerBorder: boolean
@@ -309,6 +320,30 @@ export class MarkdownRenderable extends Renderable {
   set tableOptions(value: MarkdownTableOptions | undefined) {
     this._tableOptions = value
     this.applyTableOptionsToBlocks()
+  }
+
+  get renderNode(): MarkdownOptions["renderNode"] | undefined {
+    return this._renderNode
+  }
+
+  set renderNode(value: MarkdownOptions["renderNode"] | undefined) {
+    if (this._renderNode === value) return
+    this._renderNode = value
+    this.clearBlockStates()
+    this._parseState = null
+    this.updateBlocks(true)
+    this.requestRender()
+  }
+
+  get internalBlockMode(): "coalesced" | "top-level" {
+    return this._internalBlockMode
+  }
+
+  set internalBlockMode(value: "coalesced" | "top-level") {
+    if (this._internalBlockMode === value) return
+    this._internalBlockMode = value
+    this.updateBlocks(true)
+    this.requestRender()
   }
 
   private getStyle(group: string): StyleDefinition | undefined {
@@ -494,7 +529,13 @@ export class MarkdownRenderable extends Renderable {
     renderable.marginBottom = marginBottom
   }
 
-  private createMarkdownCodeRenderable(content: string, id: string, marginBottom: number = 0): CodeRenderable {
+  private createMarkdownCodeRenderable(
+    content: string,
+    id: string,
+    marginBottom: number = 0,
+    onChunks: OnChunksCallback = this._linkifyMarkdownChunks,
+    baseHighlight?: string,
+  ): CodeRenderable {
     return new CodeRenderable(this.ctx, {
       id,
       content,
@@ -505,9 +546,54 @@ export class MarkdownRenderable extends Renderable {
       conceal: this._conceal,
       drawUnstyledText: false,
       streaming: true,
-      onChunks: this._linkifyMarkdownChunks,
+      baseHighlight,
+      onChunks,
       treeSitterClient: this._treeSitterClient,
       width: "100%",
+      marginBottom,
+    })
+  }
+
+  private getBlockquoteContent(token: MarkedToken): string {
+    return "text" in token && typeof token.text === "string" && token.text ? token.text : " "
+  }
+
+  private getBlockquoteBorderColor(): ColorInput {
+    return this.getStyle("conceal")?.fg ?? this.getStyle("default")?.fg ?? this._fg ?? "#FFFFFF"
+  }
+
+  private createBlockquoteRenderable(token: MarkedToken, id: string, marginBottom: number = 0): BoxRenderable {
+    const renderable = new BoxRenderable(this.ctx, {
+      id,
+      width: "100%",
+      border: ["left"],
+      borderColor: this.getBlockquoteBorderColor(),
+      paddingLeft: 1,
+      flexShrink: 0,
+      marginBottom,
+    })
+
+    renderable.add(
+      this.createMarkdownCodeRenderable(
+        this.getBlockquoteContent(token),
+        `${id}-content`,
+        0,
+        this._linkifyMarkdownChunks,
+        "markup.quote",
+      ),
+    )
+
+    return renderable
+  }
+
+  private createHorizontalRuleRenderable(id: string, marginBottom: number = 0): BoxRenderable {
+    return new BoxRenderable(this.ctx, {
+      id,
+      width: "100%",
+      height: 1,
+      border: ["top"],
+      borderColor: this.getStyle("conceal")?.fg ?? this._fg ?? "#888888",
+      flexShrink: 0,
       marginBottom,
     })
   }
@@ -529,7 +615,12 @@ export class MarkdownRenderable extends Renderable {
     })
   }
 
-  private applyMarkdownCodeRenderable(renderable: CodeRenderable, content: string, marginBottom: number): void {
+  private applyMarkdownCodeRenderable(
+    renderable: CodeRenderable,
+    content: string,
+    marginBottom: number,
+    baseHighlight?: string,
+  ): void {
     renderable.content = content
     renderable.filetype = "markdown"
     renderable.syntaxStyle = this._syntaxStyle
@@ -538,10 +629,39 @@ export class MarkdownRenderable extends Renderable {
     renderable.conceal = this._conceal
     renderable.drawUnstyledText = false
     renderable.streaming = true
+    renderable.baseHighlight = baseHighlight
     renderable.marginBottom = marginBottom
   }
 
-  private applyCodeBlockRenderable(renderable: CodeRenderable, token: Tokens.Code, marginBottom: number): void {
+  private applyBlockquoteRenderable(renderable: Renderable, token: MarkedToken, marginBottom: number): void {
+    if (!(renderable instanceof BoxRenderable)) return
+
+    renderable.borderColor = this.getBlockquoteBorderColor()
+    renderable.marginBottom = marginBottom
+
+    const child = renderable.getChildren()[0]
+    if (child instanceof CodeRenderable) {
+      this.applyMarkdownCodeRenderable(child, this.getBlockquoteContent(token), 0, "markup.quote")
+      return
+    }
+
+    for (const existing of renderable.getChildren()) {
+      existing.destroyRecursively()
+    }
+    renderable.add(
+      this.createMarkdownCodeRenderable(
+        this.getBlockquoteContent(token),
+        `${renderable.id}-content`,
+        0,
+        this._linkifyMarkdownChunks,
+        "markup.quote",
+      ),
+    )
+  }
+
+  private applyCodeBlockRenderable(renderable: Renderable, token: Tokens.Code, marginBottom: number): void {
+    if (!(renderable instanceof CodeRenderable)) return
+
     renderable.content = token.text
     renderable.filetype = infoStringToFiletype(token.lang ?? "")
     renderable.syntaxStyle = this._syntaxStyle
@@ -554,7 +674,7 @@ export class MarkdownRenderable extends Renderable {
   }
 
   private shouldRenderSeparately(token: MarkedToken): boolean {
-    return token.type === "code" || token.type === "table" || token.type === "blockquote"
+    return token.type === "code" || token.type === "table" || token.type === "blockquote" || token.type === "hr"
   }
 
   private getInterBlockMargin(token: MarkedToken, hasNextToken: boolean): number {
@@ -642,11 +762,8 @@ export class MarkdownRenderable extends Renderable {
       }
 
       const prev = blocks[blocks.length - 1]
-      const marginTop =
-        prev &&
-        (this.shouldRenderSeparately(prev.token) || TRAILING_MARKDOWN_BLOCK_BREAKS_RE.test(prev.token.raw + gapBefore))
-          ? 1
-          : 0
+      const separated = prev ? TRAILING_MARKDOWN_BLOCK_BREAKS_RE.test(prev.token.raw + gapBefore) : false
+      const marginTop = prev && this.shouldAddTopLevelMargin(prev.token, token, separated) ? 1 : 0
 
       blocks.push({
         token,
@@ -657,6 +774,13 @@ export class MarkdownRenderable extends Renderable {
     }
 
     return blocks
+  }
+
+  private shouldAddTopLevelMargin(prev: MarkedToken, current: MarkedToken, separated: boolean): boolean {
+    if (current.type === "heading" || prev.type === "heading") return true
+    if (current.type === "list") return separated
+    if (this.shouldRenderSeparately(prev) || this.shouldRenderSeparately(current)) return true
+    return separated && prev.type === "paragraph" && current.type === "paragraph"
   }
 
   private getTableRowsToRender(table: Tokens.Table): Tokens.TableCell[][] {
@@ -841,6 +965,8 @@ export class MarkdownRenderable extends Renderable {
       columnFitter: this._tableOptions?.columnFitter ?? "proportional",
       wrapMode: this._tableOptions?.wrapMode ?? "word",
       cellPadding: this._tableOptions?.cellPadding ?? 0,
+      cellPaddingX: this._tableOptions?.cellPaddingX ?? this._tableOptions?.cellPadding ?? 0,
+      cellPaddingY: this._tableOptions?.cellPaddingY ?? this._tableOptions?.cellPadding ?? 0,
       columnGap: this.usesBorderlessColumnSpacing() ? 2 : 0,
       border: borders,
       outerBorder: this._tableOptions?.outerBorder ?? borders,
@@ -858,7 +984,8 @@ export class MarkdownRenderable extends Renderable {
     tableRenderable.columnWidthMode = options.columnWidthMode
     tableRenderable.columnFitter = options.columnFitter
     tableRenderable.wrapMode = options.wrapMode
-    tableRenderable.cellPadding = options.cellPadding
+    tableRenderable.cellPaddingX = options.cellPaddingX
+    tableRenderable.cellPaddingY = options.cellPaddingY
     tableRenderable.columnGap = options.columnGap
     tableRenderable.border = options.border
     tableRenderable.outerBorder = options.outerBorder
@@ -899,6 +1026,8 @@ export class MarkdownRenderable extends Renderable {
       columnFitter: options.columnFitter,
       wrapMode: options.wrapMode,
       cellPadding: options.cellPadding,
+      cellPaddingX: options.cellPaddingX,
+      cellPaddingY: options.cellPaddingY,
       columnGap: options.columnGap,
       border: options.border,
       outerBorder: options.outerBorder,
@@ -986,6 +1115,18 @@ export class MarkdownRenderable extends Renderable {
       return next
     }
 
+    if (token.type === "blockquote") {
+      const renderable = this.createBlockquoteRenderable(token, id)
+      renderable.marginTop = marginTop
+      return { renderable }
+    }
+
+    if (token.type === "hr") {
+      const renderable = this.createHorizontalRuleRenderable(id)
+      renderable.marginTop = marginTop
+      return { renderable }
+    }
+
     const markdownRaw = this.getTopLevelBlockRaw(token)
     if (!markdownRaw) {
       return { renderable: undefined }
@@ -1017,7 +1158,9 @@ export class MarkdownRenderable extends Renderable {
     }
     const custom = this._renderNode(block.token, context)
     if (custom) {
-      this.applyMargins(custom, block.marginTop, 0)
+      const marginTop =
+        typeof custom.marginTop === "number" ? Math.max(custom.marginTop, block.marginTop) : block.marginTop
+      this.applyMargins(custom, marginTop, 0)
       return { renderable: custom }
     }
 
@@ -1030,6 +1173,14 @@ export class MarkdownRenderable extends Renderable {
 
     if (token.type === "code") {
       return this.createCodeRenderable(token, id, marginBottom)
+    }
+
+    if (token.type === "blockquote") {
+      return this.createBlockquoteRenderable(token, id, marginBottom)
+    }
+
+    if (token.type === "hr") {
+      return this.createHorizontalRuleRenderable(id, marginBottom)
     }
 
     if (token.type === "table") {
@@ -1051,7 +1202,17 @@ export class MarkdownRenderable extends Renderable {
     const marginBottom = this.getInterBlockMargin(token, hasNextToken)
 
     if (token.type === "code") {
-      this.applyCodeBlockRenderable(state.renderable as CodeRenderable, token as Tokens.Code, marginBottom)
+      this.applyCodeBlockRenderable(state.renderable, token as Tokens.Code, marginBottom)
+      return
+    }
+
+    if (token.type === "blockquote") {
+      this.applyBlockquoteRenderable(state.renderable, token, marginBottom)
+      return
+    }
+
+    if (token.type === "hr") {
+      state.renderable.marginBottom = marginBottom
       return
     }
 
@@ -1097,12 +1258,16 @@ export class MarkdownRenderable extends Renderable {
     }
 
     if (state.renderable instanceof CodeRenderable) {
-      this.applyMarkdownCodeRenderable(state.renderable, token.raw, marginBottom)
+      this.applyMarkdownCodeRenderable(state.renderable, this.getTopLevelBlockRaw(token) ?? token.raw, marginBottom)
       return
     }
 
     state.renderable.destroyRecursively()
-    const markdownRenderable = this.createMarkdownCodeRenderable(token.raw, `${this.id}-block-${index}`, marginBottom)
+    const markdownRenderable = this.createMarkdownCodeRenderable(
+      this.getTopLevelBlockRaw(token) ?? token.raw,
+      `${this.id}-block-${index}`,
+      marginBottom,
+    )
     this.add(markdownRenderable)
     state.renderable = markdownRenderable
   }
@@ -1139,6 +1304,23 @@ export class MarkdownRenderable extends Renderable {
         continue
       }
 
+      if (
+        existing &&
+        !forceTableRefresh &&
+        !this._renderNode &&
+        existing.token.type === block.token.type &&
+        this.canUpdateBlockRenderable(existing.renderable, block.token)
+      ) {
+        this.updateBlockRenderable(existing, block.token, blockIndex, blockIndex < blocks.length - 1)
+        existing.renderable.marginBottom = 0
+        if (existing.marginTop !== block.marginTop) {
+          this.applyMargins(existing.renderable, block.marginTop, 0)
+        }
+        this.syncTopLevelBlockState(existing, block)
+        blockIndex++
+        continue
+      }
+
       if (existing) {
         existing.renderable.destroyRecursively()
       }
@@ -1161,6 +1343,15 @@ export class MarkdownRenderable extends Renderable {
       const removed = this._blockStates.pop()!
       removed.renderable.destroyRecursively()
     }
+  }
+
+  private canUpdateBlockRenderable(renderable: Renderable, token: MarkedToken): boolean {
+    if (token.type === "code") return renderable instanceof CodeRenderable
+
+    if (token.type === "table") return renderable instanceof TextTableRenderable
+    if (token.type === "blockquote") return renderable instanceof BoxRenderable
+    if (token.type === "hr") return renderable instanceof BoxRenderable
+    return renderable instanceof CodeRenderable
   }
 
   private updateBlocks(forceTableRefresh: boolean = false): void {
@@ -1319,7 +1510,17 @@ export class MarkdownRenderable extends Renderable {
       const marginBottom = this.getInterBlockMargin(state.token, hasNextToken)
 
       if (state.token.type === "code") {
-        this.applyCodeBlockRenderable(state.renderable as CodeRenderable, state.token as Tokens.Code, marginBottom)
+        this.applyCodeBlockRenderable(state.renderable, state.token as Tokens.Code, marginBottom)
+        continue
+      }
+
+      if (state.token.type === "blockquote") {
+        this.applyBlockquoteRenderable(state.renderable, state.token, marginBottom)
+        continue
+      }
+
+      if (state.token.type === "hr") {
+        state.renderable.marginBottom = marginBottom
         continue
       }
 
@@ -1361,13 +1562,17 @@ export class MarkdownRenderable extends Renderable {
       }
 
       if (state.renderable instanceof CodeRenderable) {
-        this.applyMarkdownCodeRenderable(state.renderable, state.token.raw, marginBottom)
+        this.applyMarkdownCodeRenderable(
+          state.renderable,
+          this.getTopLevelBlockRaw(state.token) ?? state.token.raw,
+          marginBottom,
+        )
         continue
       }
 
       state.renderable.destroyRecursively()
       const markdownRenderable = this.createMarkdownCodeRenderable(
-        state.token.raw,
+        this.getTopLevelBlockRaw(state.token) ?? state.token.raw,
         `${this.id}-block-${i}`,
         marginBottom,
       )

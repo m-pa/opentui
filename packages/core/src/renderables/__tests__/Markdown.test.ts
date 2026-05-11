@@ -65,10 +65,19 @@ function createMarkdownRenderable(options: MarkdownOptions): MarkdownRenderable 
 }
 
 async function renderMarkdownRenderable(md: MarkdownRenderable, timeoutMs: number = 2000): Promise<void> {
-  const hasPendingMarkdownParagraphHighlights = (): boolean =>
-    md
-      .getChildren()
-      .some((child) => child instanceof CodeRenderable && child.filetype === "markdown" && child.isHighlighting)
+  const hasPendingMarkdownParagraphHighlights = (): boolean => {
+    const children = [...md.getChildren()]
+
+    while (children.length > 0) {
+      const child = children.pop()!
+      if (child instanceof CodeRenderable && child.filetype === "markdown" && child.isHighlighting) {
+        return true
+      }
+      children.push(...child.getChildren())
+    }
+
+    return false
+  }
 
   const startedAt = Date.now()
 
@@ -170,6 +179,8 @@ test("tableOptions updates existing markdown table renderable", async () => {
     columnFitter: "balanced",
     wrapMode: "word",
     cellPadding: 1,
+    cellPaddingX: 2,
+    cellPaddingY: 0,
     borders: false,
     selectable: false,
   }
@@ -181,11 +192,37 @@ test("tableOptions updates existing markdown table renderable", async () => {
   expect(updatedTable.columnWidthMode).toBe("full")
   expect(updatedTable.columnFitter).toBe("balanced")
   expect(updatedTable.wrapMode).toBe("word")
-  expect(updatedTable.cellPadding).toBe(1)
+  expect(updatedTable.cellPadding).toBe(0)
+  expect(updatedTable.cellPaddingX).toBe(2)
+  expect(updatedTable.cellPaddingY).toBe(0)
   expect(updatedTable.border).toBe(false)
   expect(updatedTable.outerBorder).toBe(false)
   expect(updatedTable.showBorders).toBe(false)
   expect(updatedTable.selectable).toBe(false)
+})
+
+test("tableOptions.cellPaddingX pads cells horizontally without vertical padding", async () => {
+  const md = createMarkdownRenderable({
+    id: "markdown-table-horizontal-padding",
+    content: "| A | B |\n|---|---|\n| 1 | 2 |",
+    syntaxStyle,
+    tableOptions: { style: "grid", widthMode: "content", cellPaddingX: 1, cellPaddingY: 0 },
+  })
+
+  renderer.root.add(md)
+  await renderMarkdownRenderable(md)
+
+  const lines = captureFrame()
+    .split("\n")
+    .map((line) => line.trimEnd())
+  expect("\n" + lines.join("\n").trimEnd()).toMatchInlineSnapshot(`
+    "
+    ┌───┬───┐
+    │ A │ B │
+    ├───┼───┤
+    │ 1 │ 2 │
+    └───┴───┘"
+  `)
 })
 
 test("internalBlockMode=top-level defaults markdown tables to borderless columns", async () => {
@@ -1020,6 +1057,157 @@ test("list with inline formatting", async () => {
   `)
 })
 
+test("assistant-style top-level markdown layout", async () => {
+  const md = createMarkdownRenderable({
+    id: "assistant-style-layout",
+    content: `# OpenTUI Markdown Demo
+
+Welcome to the **MarkdownRenderable** showcase! This demonstrates automatic table alignment.
+
+## Features
+
+- Automatic **table column alignment** based on content width
+- Proper handling of \`inline code\`, **bold**, and *italic* in tables
+
+## Renderer Stress Cases
+
+### Interleaved Code
+
+Start with a short conclusion before any code appears.
+
+\`\`\`ts
+export function parse(input: string) {
+  return input.trim().split(/\\\\s+/)
+}
+\`\`\`
+
+Then continue with prose immediately after the code block.
+
+### Quote, Table, Diff
+
+> Quoted note after the list. It should preserve quote styling.
+
+| Feature | Stress |
+| --- | --- |
+| Markdown | prose/code/table interleave |
+| Renderer | wrapping and spacing |
+
+\`\`\`diff
+- const renderer = oldMarkdown
++ const renderer = experimentalMarkdown
+\`\`\`
+
+---`,
+    syntaxStyle,
+    internalBlockMode: "top-level",
+    tableOptions: { style: "grid", widthMode: "content", cellPaddingX: 1 },
+  })
+
+  renderer.root.add(md)
+  await renderMarkdownRenderable(md)
+
+  const lines = captureFrame()
+    .split("\n")
+    .map((line) => line.trimEnd())
+  expect("\n" + lines.join("\n").trimEnd()).toMatchInlineSnapshot(`
+    "
+    OpenTUI Markdown Demo
+    
+    Welcome to the MarkdownRenderable showcase! This
+    demonstrates automatic table alignment.
+    
+    Features
+    
+    - Automatic table column alignment based on content width
+    - Proper handling of inline code, bold, and italic in tables
+    
+    Renderer Stress Cases
+    
+    Interleaved Code
+    
+    Start with a short conclusion before any code appears.
+    
+    export function parse(input: string) {
+      return input.trim().split(/\\\\s+/)
+    }
+    
+    Then continue with prose immediately after the code block.
+    
+    Quote, Table, Diff
+    
+    │ Quoted note after the list. It should preserve quote
+    │ styling.
+
+    ┌──────────┬─────────────────────────────┐
+    │ Feature  │ Stress                      │
+    ├──────────┼─────────────────────────────┤
+    │ Markdown │ prose/code/table interleave │
+    ├──────────┼─────────────────────────────┤
+    │ Renderer │ wrapping and spacing        │
+    └──────────┴─────────────────────────────┘
+    
+    - const renderer = oldMarkdown
+    + const renderer = experimentalMarkdown
+    
+    ────────────────────────────────────────────────────────────"
+  `)
+})
+
+test("top-level structural markdown blocks have exactly one blank row between them", async () => {
+  const md = createMarkdownRenderable({
+    id: "markdown-structural-spacing",
+    content: `Paragraph before quote.
+
+> Quote text.
+
+| A | B |
+| --- | --- |
+| 1 | 2 |
+
+\`\`\`diff
+- old
++ new
+\`\`\`
+
+Paragraph after diff.
+
+---
+
+## Next Section`,
+    syntaxStyle,
+    internalBlockMode: "top-level",
+    tableOptions: { style: "grid", widthMode: "content", cellPaddingX: 1 },
+  })
+
+  renderer.root.add(md)
+  await renderMarkdownRenderable(md)
+
+  const lines = captureFrame()
+    .split("\n")
+    .map((line) => line.trimEnd())
+  expect("\n" + lines.join("\n").trimEnd()).toMatchInlineSnapshot(`
+    "
+    Paragraph before quote.
+    
+    │ Quote text.
+    
+    ┌───┬───┐
+    │ A │ B │
+    ├───┼───┤
+    │ 1 │ 2 │
+    └───┴───┘
+    
+    - old
+    + new
+    
+    Paragraph after diff.
+    
+    ────────────────────────────────────────────────────────────
+    
+    Next Section"
+  `)
+})
+
 // Blockquote tests
 
 test("simple blockquote", async () => {
@@ -1028,9 +1216,103 @@ test("simple blockquote", async () => {
 
   expect(await renderMarkdown(markdown)).toMatchInlineSnapshot(`
     "
-    > This is a quote
-    > spanning multiple lines"
+    │ This is a quote
+    │ spanning multiple lines"
   `)
+})
+
+test("blockquote uses markup.quote style for text and conceal style for bar", async () => {
+  const quoteColor = RGBA.fromValues(0.25, 0.5, 0.75, 1)
+  const concealColor = RGBA.fromValues(0.1, 0.2, 0.3, 1)
+  const md = createMarkdownRenderable({
+    id: "markdown-blockquote-style",
+    content: "> Quote text",
+    syntaxStyle: SyntaxStyle.fromStyles({
+      default: { fg: RGBA.fromValues(1, 1, 1, 1) },
+      conceal: { fg: concealColor },
+      "markup.quote": { fg: quoteColor, italic: true },
+    }),
+  })
+
+  renderer.root.add(md)
+  await renderMarkdownRenderable(md)
+
+  const spans = captureSpans()
+  expect(findSpanContaining(spans, "│")?.fg?.toInts()).toEqual(concealColor.toInts())
+
+  const textSpan = findSpanContaining(spans, "Quote text")
+  expect(textSpan?.fg?.toInts()).toEqual(quoteColor.toInts())
+  expect((textSpan?.attributes ?? 0) & TextAttributes.ITALIC).toBe(TextAttributes.ITALIC)
+})
+
+test("blockquote updates quote text and bar colors when syntaxStyle changes", async () => {
+  const quoteColor1 = RGBA.fromValues(0.25, 0.5, 0.75, 1)
+  const quoteColor2 = RGBA.fromValues(0.75, 0.5, 0.25, 1)
+  const concealColor1 = RGBA.fromValues(0.1, 0.2, 0.3, 1)
+  const concealColor2 = RGBA.fromValues(0.3, 0.2, 0.1, 1)
+  const theme1 = SyntaxStyle.fromStyles({
+    default: { fg: RGBA.fromValues(1, 1, 1, 1) },
+    conceal: { fg: concealColor1 },
+    "markup.quote": { fg: quoteColor1, italic: true },
+  })
+  const theme2 = SyntaxStyle.fromStyles({
+    default: { fg: RGBA.fromValues(1, 1, 1, 1) },
+    conceal: { fg: concealColor2 },
+    "markup.quote": { fg: quoteColor2, italic: true },
+  })
+  const md = createMarkdownRenderable({
+    id: "markdown-blockquote-style-update",
+    content: "> Quote text",
+    syntaxStyle: theme1,
+  })
+
+  renderer.root.add(md)
+  await renderMarkdownRenderable(md)
+  expect(findSpanContaining(captureSpans(), "│")?.fg?.toInts()).toEqual(concealColor1.toInts())
+  expect(findSpanContaining(captureSpans(), "Quote text")?.fg?.toInts()).toEqual(quoteColor1.toInts())
+
+  md.syntaxStyle = theme2
+  renderer.requestRender()
+  await renderMarkdownRenderable(md)
+
+  expect(findSpanContaining(captureSpans(), "│")?.fg?.toInts()).toEqual(concealColor2.toInts())
+  expect(findSpanContaining(captureSpans(), "Quote text")?.fg?.toInts()).toEqual(quoteColor2.toInts())
+})
+
+test("fenced diff blocks color added and removed lines", async () => {
+  const mockTreeSitterClient = new MockTreeSitterClient()
+  mockTreeSitterClient.setMockResult({
+    highlights: [
+      [0, 5, "diff.minus"],
+      [6, 11, "diff.plus"],
+    ],
+  })
+
+  const md = createMarkdownRenderable({
+    id: "markdown-diff-fence",
+    content: "```diff\n- old\n+ new\n unchanged\n```",
+    treeSitterClient: mockTreeSitterClient,
+    syntaxStyle: SyntaxStyle.fromStyles({
+      default: { fg: RGBA.fromValues(1, 1, 1, 1) },
+      "diff.minus": { fg: RGBA.fromValues(1, 0, 0, 1) },
+      "diff.plus": { fg: RGBA.fromValues(0, 1, 0, 1) },
+    }),
+  })
+
+  renderer.root.add(md)
+  await renderMarkdownRenderable(md)
+
+  const codeBlock = md._blockStates[0]?.renderable
+  expect(codeBlock).toBeInstanceOf(CodeRenderable)
+  expect((codeBlock as CodeRenderable).filetype).toBe("diff")
+  expect(mockTreeSitterClient.isHighlighting()).toBe(true)
+
+  mockTreeSitterClient.resolveAllHighlightOnce()
+  await Bun.sleep(10)
+  await renderOnce()
+
+  expect(findSpanContaining(captureSpans(), "- old")?.fg?.toInts()).toEqual(RGBA.fromValues(1, 0, 0, 1).toInts())
+  expect(findSpanContaining(captureSpans(), "+ new")?.fg?.toInts()).toEqual(RGBA.fromValues(0, 1, 0, 1).toInts())
 })
 
 // Inline formatting tests
@@ -1113,9 +1395,32 @@ After`
   expect(await renderMarkdown(markdown)).toMatchInlineSnapshot(`
     "
     Before
+    ────────────────────────────────────────────────────────────
+    
+    After"
+  `)
+})
 
-    ---
+test("horizontal rule has one blank row before and after", async () => {
+  const md = createMarkdownRenderable({
+    id: "markdown-hr-heading-spacing",
+    content: "Before\n\n---\n\n## After",
+    syntaxStyle,
+    internalBlockMode: "top-level",
+  })
 
+  renderer.root.add(md)
+  await renderMarkdownRenderable(md)
+
+  const lines = captureFrame()
+    .split("\n")
+    .map((line) => line.trimEnd())
+  expect("\n" + lines.join("\n").trimEnd()).toMatchInlineSnapshot(`
+    "
+    Before
+    
+    ────────────────────────────────────────────────────────────
+    
     After"
   `)
 })
@@ -1170,8 +1475,7 @@ Visit [GitHub](https://github.com) for more.
     Links
 
     Visit GitHub (https://github.com) for more.
-
-    ---
+    ────────────────────────────────────────────────────────────
 
     Press ? for help"
   `)
@@ -1299,9 +1603,101 @@ test("custom renderNode output survives top-level spacing updates", async () => 
   expect("\n" + lines.join("\n").trimEnd()).toMatchInlineSnapshot(`
     "
     Paragraph
-
     CUSTOM"
   `)
+})
+
+test("renderNode setter updates existing markdown renderable", async () => {
+  const md = createMarkdownRenderable({
+    id: "render-node-setter",
+    content: "# Heading",
+    syntaxStyle,
+  })
+
+  renderer.root.add(md)
+  await renderMarkdownRenderable(md)
+
+  md.renderNode = (node, ctx) => {
+    if (node.type !== "heading") return ctx.defaultRender()
+    return new TextRenderable(renderer, {
+      content: "CUSTOM",
+      width: "100%",
+    })
+  }
+  await renderMarkdownRenderable(md)
+
+  const lines = captureFrame()
+    .split("\n")
+    .map((line) => line.trimEnd())
+  expect("\n" + lines.join("\n").trimEnd()).toMatchInlineSnapshot(`
+    "
+    CUSTOM"
+  `)
+})
+
+test("renderNode setter rerenders same-type top-level blocks", async () => {
+  const md = createMarkdownRenderable({
+    id: "render-node-setter-top-level",
+    content: "# Heading",
+    syntaxStyle,
+    internalBlockMode: "top-level",
+  })
+
+  renderer.root.add(md)
+  await renderMarkdownRenderable(md)
+
+  md.renderNode = (node, ctx) => {
+    if (node.type !== "heading") return ctx.defaultRender()
+    return new TextRenderable(renderer, {
+      content: "CUSTOM",
+      width: "100%",
+    })
+  }
+  await renderMarkdownRenderable(md)
+
+  const lines = captureFrame()
+    .split("\n")
+    .map((line) => line.trimEnd())
+  expect("\n" + lines.join("\n").trimEnd()).toMatchInlineSnapshot(`
+    "
+    CUSTOM"
+  `)
+})
+
+test("internalBlockMode setter updates existing markdown renderable", async () => {
+  const md = createMarkdownRenderable({
+    id: "internal-block-mode-setter",
+    content: "Paragraph\n\n```ts\nconst x = 1\n```",
+    syntaxStyle,
+  })
+
+  renderer.root.add(md)
+  await renderMarkdownRenderable(md)
+
+  md.internalBlockMode = "top-level"
+  await renderMarkdownRenderable(md)
+
+  expect(md._blockStates.map((state) => state.token.type)).toEqual(["paragraph", "code"])
+  expect(md._blockStates.map((state) => state.marginTop ?? 0)).toEqual([0, 1])
+})
+
+test("custom top-level renderNode can increase default block margins", async () => {
+  const md = createMarkdownRenderable({
+    id: "custom-top-level-margin",
+    content: "Paragraph\n\n# Heading",
+    syntaxStyle,
+    internalBlockMode: "top-level",
+    renderNode: (node, ctx) => {
+      const renderable = ctx.defaultRender()
+      if (node.type === "heading" && renderable) renderable.marginTop = 2
+      return renderable
+    },
+  })
+
+  renderer.root.add(md)
+  await renderMarkdownRenderable(md)
+
+  expect(md._blockStates.map((state) => state.renderable.marginTop ?? 0)).toEqual([0, 2])
 })
 
 test("custom renderNode returning null uses default", async () => {
@@ -1528,6 +1924,50 @@ test("internalBlockMode=top-level preserves top-level block boundaries", async (
   expect(md._stableBlockCount).toBe(3)
 })
 
+test("internalBlockMode=top-level reuses table renderable when rows stream in", async () => {
+  const md = createMarkdownRenderable({
+    id: "markdown-top-level-table-reuse",
+    content: "| A | B |\n|---|---|\n| 1 | 2 |",
+    syntaxStyle,
+    streaming: true,
+    internalBlockMode: "top-level",
+    tableOptions: { widthMode: "content" },
+  })
+
+  renderer.root.add(md)
+  await renderMarkdownRenderable(md)
+
+  const table = md._blockStates[0]?.renderable
+  expect(table).toBeInstanceOf(TextTableRenderable)
+
+  md.content += "\n| 3 | 4 |"
+  await renderMarkdownRenderable(md)
+
+  expect(md._blockStates[0]?.renderable).toBe(table)
+})
+
+test("internalBlockMode=top-level updates code renderable filetype when fence changes to diff", async () => {
+  const md = createMarkdownRenderable({
+    id: "markdown-top-level-code-kind-change",
+    content: "```ts\nconst x = 1\n```",
+    syntaxStyle,
+    streaming: true,
+    internalBlockMode: "top-level",
+  })
+
+  renderer.root.add(md)
+  await renderMarkdownRenderable(md)
+
+  const first = md._blockStates[0]?.renderable
+  expect(first).toBeInstanceOf(CodeRenderable)
+
+  md.content = "```diff\n- const x = 1\n+ const y = 2\n```"
+  await renderMarkdownRenderable(md)
+
+  expect(md._blockStates[0]?.renderable).toBe(first)
+  expect((md._blockStates[0]?.renderable as CodeRenderable).filetype).toBe("diff")
+})
+
 test("internalBlockMode=top-level normalizes one blank row between top-level blocks", async () => {
   const md = createMarkdownRenderable({
     id: "markdown-top-level-spacing",
@@ -1546,7 +1986,7 @@ test("internalBlockMode=top-level normalizes one blank row between top-level blo
   expect("\n" + lines.join("\n").trimEnd()).toMatchInlineSnapshot(`
     "
     Title
-
+    
     Paragraph
 
     const x = 1"
@@ -1575,6 +2015,29 @@ test("internalBlockMode=top-level keeps tight paragraph list transitions tight",
     Paragraph:
     - one
     - two"
+  `)
+})
+
+test("internalBlockMode=top-level preserves source blank line before lists", async () => {
+  const md = createMarkdownRenderable({
+    id: "markdown-top-level-list-spacing",
+    content: "The table alignment uses:\n\n1. AST-based parsing\n2. Caching",
+    syntaxStyle,
+    internalBlockMode: "top-level",
+  })
+
+  renderer.root.add(md)
+  await renderMarkdownRenderable(md)
+
+  const lines = captureFrame()
+    .split("\n")
+    .map((line) => line.trimEnd())
+  expect("\n" + lines.join("\n").trimEnd()).toMatchInlineSnapshot(`
+    "
+    The table alignment uses:
+    
+    1. AST-based parsing
+    2. Caching"
   `)
 })
 
@@ -1626,7 +2089,7 @@ test("internalBlockMode=top-level preserves spacing after tight fenced code bloc
   expect("\n" + lines.join("\n").trimEnd()).toMatchInlineSnapshot(`
     "
     const x = 1
-
+    
     Paragraph"
   `)
 })
