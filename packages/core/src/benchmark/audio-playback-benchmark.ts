@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { performance } from "node:perf_hooks"
-import { Audio } from "../audio.js"
+import { Audio, type AudioSound, type AudioVoice } from "../audio.js"
 
 type MixScenario = {
   name: string
@@ -144,11 +144,11 @@ function summarizeSamples(samples: number[]): { avgMs: number; medianMs: number;
   }
 }
 
-function runMixScenario(audio: Audio, soundId: number, scenario: MixScenario): MixResult {
-  const startedVoices: number[] = []
+function runMixScenario(audio: Audio, sound: AudioSound, scenario: MixScenario): MixResult {
+  const startedVoices: AudioVoice[] = []
 
   for (let i = 0; i < scenario.activeVoices; i += 1) {
-    const voice = audio.play(soundId, {
+    const voice = sound.play({
       volume: 0.25,
       pan: (i % 2 === 0 ? -1 : 1) * 0.2,
       loop: true,
@@ -195,12 +195,12 @@ function runMixScenario(audio: Audio, soundId: number, scenario: MixScenario): M
 
 function runVoiceLifecycleScenario(
   audio: Audio,
-  soundId: number,
+  sound: AudioSound,
   scenario: VoiceLifecycleScenario,
 ): VoiceLifecycleResult {
   for (let i = 0; i < LIFECYCLE_WARMUP_ITERATIONS; i += 1) {
     for (let j = 0; j < scenario.operations; j += 1) {
-      const voice = audio.play(soundId, { volume: 0.5, pan: 0, loop: false })
+      const voice = sound.play({ volume: 0.5, pan: 0, loop: false })
       if (voice != null) {
         audio.stopVoice(voice)
       }
@@ -211,7 +211,7 @@ function runVoiceLifecycleScenario(
   for (let i = 0; i < LIFECYCLE_ITERATIONS; i += 1) {
     const start = performance.now()
     for (let j = 0; j < scenario.operations; j += 1) {
-      const voice = audio.play(soundId, { volume: 0.5, pan: 0, loop: false })
+      const voice = sound.play({ volume: 0.5, pan: 0, loop: false })
       if (voice != null) {
         audio.stopVoice(voice)
       }
@@ -233,11 +233,11 @@ function runVoiceLifecycleScenario(
   }
 }
 
-function runBurstScenario(audio: Audio, soundId: number, scenario: BurstScenario): BurstResult {
+function runBurstScenario(audio: Audio, sound: AudioSound, scenario: BurstScenario): BurstResult {
   for (let i = 0; i < BURST_WARMUP_ITERATIONS; i += 1) {
-    const voices: number[] = []
+    const voices: AudioVoice[] = []
     for (let j = 0; j < scenario.startsPerTick; j += 1) {
-      const voice = audio.play(soundId, {
+      const voice = sound.play({
         volume: 0.35,
         pan: (j % 2 === 0 ? -1 : 1) * 0.15,
         loop: false,
@@ -255,9 +255,9 @@ function runBurstScenario(audio: Audio, soundId: number, scenario: BurstScenario
   const samples = new Array<number>(BURST_ITERATIONS)
   for (let i = 0; i < BURST_ITERATIONS; i += 1) {
     const start = performance.now()
-    const voices: number[] = []
+    const voices: AudioVoice[] = []
     for (let j = 0; j < scenario.startsPerTick; j += 1) {
-      const voice = audio.play(soundId, {
+      const voice = sound.play({
         volume: 0.35,
         pan: (j % 2 === 0 ? -1 : 1) * 0.15,
         loop: false,
@@ -308,20 +308,20 @@ function main(): void {
     amplitude: 0.9,
     decay: 0.85,
   })
-  const soundId = audio.loadSound(wav)
-  if (soundId == null) {
+  const sound = audio.loadSound(wav)
+  if (sound == null) {
     throw new Error("audio.loadSound() failed")
   }
 
-  const mixResults = mixScenarios.map((scenario) => runMixScenario(audio, soundId, scenario))
+  const mixResults = mixScenarios.map((scenario) => runMixScenario(audio, sound, scenario))
   const idleMixMs = mixResults[0]?.avgMs ?? 0
   for (const row of mixResults) {
     row.deltaVsIdlePct = idleMixMs > 0 ? Number((((row.avgMs - idleMixMs) / idleMixMs) * 100).toFixed(2)) : 0
   }
 
-  const lifecycleResults = lifecycleScenarios.map((scenario) => runVoiceLifecycleScenario(audio, soundId, scenario))
+  const lifecycleResults = lifecycleScenarios.map((scenario) => runVoiceLifecycleScenario(audio, sound, scenario))
 
-  const burstResults = burstScenarios.map((scenario) => runBurstScenario(audio, soundId, scenario))
+  const burstResults = burstScenarios.map((scenario) => runBurstScenario(audio, sound, scenario))
   const idleBurstMs = burstResults[0]?.avgMs ?? 0
   for (const row of burstResults) {
     row.deltaVsIdleTickPct = idleBurstMs > 0 ? Number((((row.avgMs - idleBurstMs) / idleBurstMs) * 100).toFixed(2)) : 0

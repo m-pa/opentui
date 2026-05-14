@@ -289,11 +289,11 @@ function applyGroupVolumes(): void {
 
 function playBgmVoice(): void {
   if (!musicSound || !groups || !audio) return
-  musicVoice = audio.play(musicSound, {
+  musicVoice = musicSound.play({
     volume: 1,
     pan: clampPan(bgmPan + masterPan),
     loop: true,
-    groupId: groups.music,
+    group: groups.music,
   })
   if (!musicVoice) {
     lastAction = "BGM start failed (output unavailable)"
@@ -1098,11 +1098,11 @@ function triggerSound(index: number): void {
     return
   }
   const preset = PRESETS[index]
-  const voice = audio.play(sound, {
+  const voice = sound.play({
     volume: preset.volume,
     pan: clampPan(presetBasePan(index) + effectsPan + masterPan),
     loop: false,
-    groupId: groups[preset.groupName],
+    group: groups[preset.groupName],
   })
   lastAction = voice ? `${preset.name} trigger` : `${preset.name} failed (output unavailable)`
   updateHeader()

@@ -22,9 +22,9 @@ audio.on("error", (error, context) => {
   console.error(`${context.action}: ${error.message}`)
 })
 
-const sound = await audio.loadSoundFile("click.wav")
-if (sound != null && audio.start()) {
-  audio.play(sound, { volume: 0.8, pan: 0, loop: false })
+const click = await audio.loadSoundFile("click.wav")
+if (click != null && audio.start()) {
+  click.play({ volume: 0.8, pan: 0, loop: false })
 }
 
 audio.dispose()
@@ -50,14 +50,14 @@ Create a new `Audio` instance to change `sampleRate` or `playbackChannels`.
 | `loadSound(data)`               | Decode `Uint8Array` or `ArrayBuffer`; returns `AudioSound`    |
 | `loadSoundFile(path)`           | Read and decode a file; returns `Promise<AudioSound \| null>` |
 | `unloadSound(sound)`            | Free a loaded sound and stop voices using it                  |
-| `play(sound, options?)`         | Start a voice; returns `AudioVoice \| null`                   |
+| `sound.play(options?)`          | Start a voice; returns `AudioVoice \| null`                   |
 | `stopVoice(voice)`              | Stop one active voice                                         |
-| `group(name)`                   | Create or reuse a named group; group `0` is the default group |
+| `group(name)`                   | Create or reuse a named group                                 |
 | `setVoiceGroup(voice, group)`   | Move a voice to another group                                 |
 | `setGroupVolume(group, volume)` | Set group volume                                              |
 | `setMasterVolume(volume)`       | Set master volume                                             |
 
-`play()` accepts `{ volume, pan, loop, groupId }`. Native playback clamps `volume` to `0..4` and `pan` to `-1..1`. The engine has 32 voice slots.
+`sound.play()` accepts `{ volume, pan, loop, group }`. Native playback clamps `volume` to `0..4` and `pan` to `-1..1`. The engine has 32 voice slots. `AudioSound`, `AudioVoice`, and `AudioGroup` are object handles; pass those objects back into audio methods instead of numeric IDs.
 
 ## Starting audio
 
@@ -79,7 +79,7 @@ const clickBytes = await file(clickPath).bytes()
 const click = audio.loadSound(clickBytes)
 
 if (click != null && audio.start()) {
-  audio.play(click)
+  click.play()
 }
 ```
 

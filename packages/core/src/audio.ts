@@ -6,6 +6,7 @@ import type { AudioStats } from "./zig-structs.js"
 
 const DEFAULT_AUDIO_SAMPLE_RATE = 48_000
 const DEFAULT_FFT_SIZE = 2048
+const playSound = Symbol("Audio.playSound")
 
 export interface AudioSetupOptions {
   autoStart?: boolean
@@ -36,7 +37,7 @@ export interface AudioPlayOptions {
   volume?: number
   pan?: number
   loop?: boolean
-  groupId?: number
+  group?: AudioGroup
 }
 
 export interface AudioSpectrumOptions {
@@ -50,9 +51,93 @@ export interface AudioSpectrum {
   binFrequency: number
 }
 
-export type AudioGroup = number
-export type AudioVoice = number
-export type AudioSound = number
+export class AudioSound {
+  private active = true
+
+  constructor(
+    private readonly owner: Audio,
+    private readonly id: number,
+  ) {}
+
+  get isLoaded(): boolean {
+    return this.active
+  }
+
+  unload(): boolean {
+    return this.owner.unloadSound(this)
+  }
+
+  play(options?: AudioPlayOptions): AudioVoice | null {
+    return this.owner[playSound](this, options)
+  }
+
+  resolveId(owner: Audio): number | null {
+    if (owner !== this.owner || !this.active) return null
+    return this.id
+  }
+
+  markUnloaded(): void {
+    this.active = false
+  }
+}
+
+export class AudioGroup {
+  private active = true
+
+  constructor(
+    private readonly owner: Audio,
+    private readonly id: number,
+    readonly name: string,
+  ) {}
+
+  get isActive(): boolean {
+    return this.active
+  }
+
+  setVolume(volume: number): boolean {
+    return this.owner.setGroupVolume(this, volume)
+  }
+
+  resolveId(owner: Audio): number | null {
+    if (owner !== this.owner || !this.active) return null
+    return this.id
+  }
+
+  markDisposed(): void {
+    this.active = false
+  }
+}
+
+export class AudioVoice {
+  private active = true
+
+  constructor(
+    private readonly owner: Audio,
+    private readonly id: number,
+    readonly sound: AudioSound,
+  ) {}
+
+  get isActive(): boolean {
+    return this.active
+  }
+
+  stop(): boolean {
+    return this.owner.stopVoice(this)
+  }
+
+  setGroup(group: AudioGroup): boolean {
+    return this.owner.setVoiceGroup(this, group)
+  }
+
+  resolveId(owner: Audio): number | null {
+    if (owner !== this.owner || !this.active) return null
+    return this.id
+  }
+
+  markStopped(): void {
+    this.active = false
+  }
+}
 
 export interface AudioPlaybackDevice {
   index: number
@@ -117,7 +202,9 @@ export class Audio extends EventEmitter<AudioEvents> {
   private readonly defaultStartOptions: AudioStartOptions | undefined
   private readonly sampleRate: number
   private engine: Pointer | null = null
-  private readonly groups = new Map<string, number>()
+  private readonly groups = new Map<string, AudioGroup>()
+  private readonly sounds = new Set<AudioSound>()
+  private readonly voices = new Set<AudioVoice>()
   private playbackStarted = false
   private mixerStarted = false
 
@@ -150,6 +237,42 @@ export class Audio extends EventEmitter<AudioEvents> {
     const error = message ? new Error(message) : statusToError(action, status ?? -1)
     if (cause) (error as Error & { cause?: unknown }).cause = cause
     this.emit("error", error, { action, status })
+  }
+
+  private getSoundId(action: AudioAction, sound: AudioSound): number | null {
+    if (!(sound instanceof AudioSound)) {
+      this.emitError(action, undefined, "Audio sound handle must be an AudioSound object")
+      return null
+    }
+    const id = sound.resolveId(this)
+    if (id == null) {
+      this.emitError(action, undefined, "Audio sound handle is invalid")
+    }
+    return id
+  }
+
+  private getVoiceId(action: AudioAction, voice: AudioVoice): number | null {
+    if (!(voice instanceof AudioVoice)) {
+      this.emitError(action, undefined, "Audio voice handle must be an AudioVoice object")
+      return null
+    }
+    const id = voice.resolveId(this)
+    if (id == null) {
+      this.emitError(action, undefined, "Audio voice handle is invalid")
+    }
+    return id
+  }
+
+  private getGroupId(action: AudioAction, group: AudioGroup): number | null {
+    if (!(group instanceof AudioGroup)) {
+      this.emitError(action, undefined, "Audio group handle must be an AudioGroup object")
+      return null
+    }
+    const id = group.resolveId(this)
+    if (id == null) {
+      this.emitError(action, undefined, "Audio group handle is invalid")
+    }
+    return id
   }
 
   start(options?: AudioStartOptions): boolean {
@@ -225,7 +348,9 @@ export class Audio extends EventEmitter<AudioEvents> {
       this.emitError("loadSound", result.status)
       return null
     }
-    return result.soundId
+    const sound = new AudioSound(this, result.soundId)
+    this.sounds.add(sound)
+    return sound
   }
 
   async loadSoundFile(filePath: string): Promise<AudioSound | null> {
@@ -244,10 +369,21 @@ export class Audio extends EventEmitter<AudioEvents> {
       return false
     }
 
-    const status = this.lib.audioUnload(engine, sound)
+    const soundId = this.getSoundId("unloadSound", sound)
+    if (soundId == null) return false
+
+    const status = this.lib.audioUnload(engine, soundId)
     if (status !== 0) {
       this.emitError("unloadSound", status)
       return false
+    }
+    sound.markUnloaded()
+    this.sounds.delete(sound)
+    for (const voice of this.voices) {
+      if (voice.sound === sound) {
+        voice.markStopped()
+        this.voices.delete(voice)
+      }
     }
     return true
   }
@@ -269,17 +405,24 @@ export class Audio extends EventEmitter<AudioEvents> {
       return null
     }
 
-    this.groups.set(name, result.groupId)
-    return result.groupId
+    const group = new AudioGroup(this, result.groupId, name)
+    this.groups.set(name, group)
+    return group
   }
 
-  play(sound: AudioSound, options?: AudioPlayOptions): AudioVoice | null {
+  [playSound](sound: AudioSound, options?: AudioPlayOptions): AudioVoice | null {
+    const soundId = this.getSoundId("play", sound)
+    if (soundId == null) return null
+
+    const groupId = options?.group == null ? 0 : this.getGroupId("play", options.group)
+    if (groupId == null) return null
+
     const rawOptions = options
       ? {
           volume: options.volume,
           pan: options.pan,
           loop: options.loop,
-          groupId: options.groupId ?? 0,
+          groupId,
         }
       : undefined
 
@@ -288,13 +431,15 @@ export class Audio extends EventEmitter<AudioEvents> {
       this.emitError("play", undefined, "Audio engine unavailable during play")
       return null
     }
-    const result = this.lib.audioPlay(engine, sound, rawOptions)
+    const result = this.lib.audioPlay(engine, soundId, rawOptions)
     if (result.status !== 0 || result.voiceId == null) {
       this.emitError("play", result.status)
       return null
     }
 
-    return result.voiceId
+    const voice = new AudioVoice(this, result.voiceId, sound)
+    this.voices.add(voice)
+    return voice
   }
 
   stopVoice(voice: AudioVoice): boolean {
@@ -303,11 +448,16 @@ export class Audio extends EventEmitter<AudioEvents> {
       this.emitError("stopVoice", undefined, "Audio engine unavailable during stopVoice")
       return false
     }
-    const status = this.lib.audioStopVoice(engine, voice)
+    const voiceId = this.getVoiceId("stopVoice", voice)
+    if (voiceId == null) return false
+
+    const status = this.lib.audioStopVoice(engine, voiceId)
     if (status !== 0) {
       this.emitError("stopVoice", status)
       return false
     }
+    voice.markStopped()
+    this.voices.delete(voice)
     return true
   }
 
@@ -317,7 +467,12 @@ export class Audio extends EventEmitter<AudioEvents> {
       this.emitError("setVoiceGroup", undefined, "Audio engine unavailable during setVoiceGroup")
       return false
     }
-    const status = this.lib.audioSetVoiceGroup(engine, voice, group)
+    const voiceId = this.getVoiceId("setVoiceGroup", voice)
+    if (voiceId == null) return false
+    const groupId = this.getGroupId("setVoiceGroup", group)
+    if (groupId == null) return false
+
+    const status = this.lib.audioSetVoiceGroup(engine, voiceId, groupId)
     if (status !== 0) {
       this.emitError("setVoiceGroup", status)
       return false
@@ -331,7 +486,10 @@ export class Audio extends EventEmitter<AudioEvents> {
       this.emitError("setGroupVolume", undefined, "Audio engine unavailable during setGroupVolume")
       return false
     }
-    const status = this.lib.audioSetGroupVolume(engine, group, volume)
+    const groupId = this.getGroupId("setGroupVolume", group)
+    if (groupId == null) return false
+
+    const status = this.lib.audioSetGroupVolume(engine, groupId, volume)
     if (status !== 0) {
       this.emitError("setGroupVolume", status)
       return false
@@ -518,6 +676,11 @@ export class Audio extends EventEmitter<AudioEvents> {
     if (this.mixerStarted) {
       this.stop()
     }
+    for (const sound of this.sounds) sound.markUnloaded()
+    for (const voice of this.voices) voice.markStopped()
+    for (const group of this.groups.values()) group.markDisposed()
+    this.sounds.clear()
+    this.voices.clear()
     this.groups.clear()
     this.lib.destroyAudioEngine(this.engine)
     this.engine = null

@@ -65,7 +65,7 @@ test("Audio loads wav and mixes frames", () => {
   if (sound == null || sfx == null) return
 
   expect(audio.startMixer()).toBe(true)
-  const voice = audio.play(sound, { groupId: sfx, volume: 1, pan: 0, loop: false })
+  const voice = sound.play({ group: sfx, volume: 1, pan: 0, loop: false })
   expect(voice).not.toBeNull()
   const mixed = audio.mixFrames(6, 2)
 
@@ -110,7 +110,7 @@ test("Audio startMixer enables headless mixing without playback", () => {
   expect(audio.isStarted()).toBe(false)
   expect(audio.isMixerStarted()).toBe(true)
 
-  const voice = audio.play(sound, { volume: 1, loop: true })
+  const voice = sound.play({ volume: 1, loop: true })
   expect(voice).not.toBeNull()
 
   const mixed = audio.mixFrames(6, 2)
@@ -132,14 +132,14 @@ test("Audio unloads sounds and invalidates old handles", () => {
   if (first == null) return
 
   expect(audio.startMixer()).toBe(true)
-  const firstVoice = audio.play(first, { volume: 1, pan: 0, loop: true })
+  const firstVoice = first.play({ volume: 1, pan: 0, loop: true })
   expect(firstVoice).not.toBeNull()
   expect(audio.getStats()?.voicesActive).toBeGreaterThan(0)
 
   expect(audio.unloadSound(first)).toBe(true)
   expect(audio.getStats()?.soundsLoaded).toBe(0)
   expect(audio.getStats()?.voicesActive).toBe(0)
-  expect(audio.play(first, { volume: 1 })).toBeNull()
+  expect(first.play({ volume: 1 })).toBeNull()
   expect(audio.unloadSound(first)).toBe(false)
 
   const second = audio.loadSound(buildMonoPcm16Wav([0.6, -0.2, 0.4, -0.4, 0.3, -0.1]))
@@ -147,7 +147,7 @@ test("Audio unloads sounds and invalidates old handles", () => {
   if (second == null) return
   expect(second).not.toBe(first)
 
-  const secondVoice = audio.play(second, { volume: 1, pan: 0, loop: false })
+  const secondVoice = second.play({ volume: 1, pan: 0, loop: false })
   expect(secondVoice).not.toBeNull()
 })
 
@@ -161,7 +161,7 @@ test("Audio mixes into mono and multichannel output buffers", () => {
   if (sound == null) return
 
   expect(audio.startMixer()).toBe(true)
-  const voice = audio.play(sound, { volume: 1, pan: 0, loop: true })
+  const voice = sound.play({ volume: 1, pan: 0, loop: true })
   expect(voice).not.toBeNull()
 
   const mono = audio.mixFrames(6, 1)
@@ -192,7 +192,7 @@ test("Audio updates mix stats", () => {
   if (sound == null) return
 
   expect(audio.startMixer()).toBe(true)
-  const voice = audio.play(sound, { volume: 1, pan: 0, loop: true })
+  const voice = sound.play({ volume: 1, pan: 0, loop: true })
   expect(voice).not.toBeNull()
 
   const initialStats = audio.getStats()
@@ -219,7 +219,7 @@ test("Audio tap mirrors mixed frames without consuming stream", () => {
 
   expect(audio.startMixer()).toBe(true)
   expect(audio.enableTap(2048)).toBe(true)
-  const voice = audio.play(sound, { volume: 1, pan: 0, loop: true })
+  const voice = sound.play({ volume: 1, pan: 0, loop: true })
   expect(voice).not.toBeNull()
 
   const mixed = audio.mixFrames(256, 2)
@@ -250,7 +250,7 @@ test("Audio analyzes native spectrum from tap frames", () => {
 
   expect(audio.startMixer()).toBe(true)
   expect(audio.enableTap(fftSize)).toBe(true)
-  const voice = audio.play(sound, { volume: 1, pan: 0, loop: true })
+  const voice = sound.play({ volume: 1, pan: 0, loop: true })
   expect(voice).not.toBeNull()
 
   const mixed = audio.mixFrames(fftSize, 2)
@@ -288,7 +288,7 @@ test("Audio supports immutable custom sample rate", () => {
   if (sound == null) return
 
   expect(audio.startMixer()).toBe(true)
-  const voice = audio.play(sound, { volume: 1, pan: 0, loop: true })
+  const voice = sound.play({ volume: 1, pan: 0, loop: true })
   expect(voice).not.toBeNull()
 
   const mixed = audio.mixFrames(128, 2)
