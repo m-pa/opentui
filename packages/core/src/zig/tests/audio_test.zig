@@ -386,6 +386,46 @@ test "audio - enableTap and readTap return captured frames" {
     try expectStatusOk(audio.enableTap(engine, false, 0));
 }
 
+test "audio - analyzeSpectrum peaks near sine frequency" {
+    const engine = try createEngine(null);
+    defer audio.destroy(engine);
+
+    const fft_size = 2048;
+    const target_bin: usize = 16;
+    const frequency = (@as(f32, @floatFromInt(TEST_SAMPLE_RATE)) * @as(f32, @floatFromInt(target_bin))) / @as(f32, @floatFromInt(fft_size));
+
+    var samples: [fft_size]i16 = undefined;
+    for (&samples, 0..) |*sample, i| {
+        const phase = (2.0 * std.math.pi * frequency * @as(f32, @floatFromInt(i))) / @as(f32, @floatFromInt(TEST_SAMPLE_RATE));
+        sample.* = @intFromFloat(@sin(phase) * 24_000.0);
+    }
+
+    const sound_id = try loadSoundFromSamples(engine, 1, &samples);
+    try expectStatusOk(audio.startMixer(engine));
+    _ = try playLoop(engine, sound_id, 0, 0);
+    try expectStatusOk(audio.enableTap(engine, true, fft_size));
+
+    var mixed: [fft_size * 2]f32 = [_]f32{0} ** (fft_size * 2);
+    try expectStatusOk(audio.mixToBuffer(engine, mixed[0..].ptr, fft_size, 2));
+
+    var magnitudes: [fft_size / 2]f32 = [_]f32{0} ** (fft_size / 2);
+    var frames_read: u32 = 0;
+    try expectStatusOk(audio.analyzeSpectrum(engine, magnitudes[0..].ptr, fft_size, @intCast(magnitudes.len), &frames_read));
+    try testing.expectEqual(@as(u32, fft_size), frames_read);
+
+    var peak_index: usize = 1;
+    var peak_value: f32 = 0;
+    for (magnitudes[1..], 1..) |magnitude, index| {
+        if (magnitude > peak_value) {
+            peak_value = magnitude;
+            peak_index = index;
+        }
+    }
+
+    try testing.expect(peak_value > 0.1);
+    try testing.expect(peak_index >= target_bin - 1 and peak_index <= target_bin + 1);
+}
+
 test "audio - refresh and playback device selection APIs" {
     const engine = try createEngine(null);
     defer audio.destroy(engine);

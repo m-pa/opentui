@@ -268,6 +268,10 @@ export fn audioReadTap(engine: *native_audio.Engine, out_ptr: ?[*]f32, frame_cou
     return native_audio.readTap(engine, out_ptr, frame_count, channels, out_frames_read);
 }
 
+export fn audioAnalyzeSpectrum(engine: *native_audio.Engine, out_ptr: ?[*]f32, fft_size: u32, bin_count: u32, out_frames_read: ?*u32) i32 {
+    return native_audio.analyzeSpectrum(engine, out_ptr, fft_size, bin_count, out_frames_read);
+}
+
 export fn audioGetStats(engine: *native_audio.Engine, out_stats: ?*native_audio.Stats) i32 {
     return native_audio.getStats(engine, out_stats);
 }

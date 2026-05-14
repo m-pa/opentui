@@ -75,6 +75,143 @@ const Voice = struct {
     sound_ready: bool = false,
 };
 
+const LatestWindow = struct {
+    start_frame: u32,
+    frame_count: u32,
+};
+
+const TapRingBuffer = struct {
+    channels: u8 = 2,
+    capacity_frames: u32 = 0,
+    write_frame: u32 = 0,
+    frame_count: u32 = 0,
+    buffer: ?[]f32 = null,
+
+    fn deinit(self: *TapRingBuffer, allocator: std.mem.Allocator) void {
+        if (self.buffer) |buffer| {
+            allocator.free(buffer);
+        }
+        self.* = .{};
+    }
+
+    fn enable(self: *TapRingBuffer, allocator: std.mem.Allocator, capacity_frames: u32) !void {
+        if (capacity_frames == 0) return error.InvalidInput;
+
+        const sample_count = try std.math.mul(usize, @as(usize, capacity_frames), @as(usize, self.channels));
+        const next_buffer = try allocator.alloc(f32, sample_count);
+        @memset(next_buffer, 0);
+
+        if (self.buffer) |buffer| {
+            allocator.free(buffer);
+        }
+
+        self.buffer = next_buffer;
+        self.capacity_frames = capacity_frames;
+        self.write_frame = 0;
+        self.frame_count = 0;
+    }
+
+    fn disable(self: *TapRingBuffer, allocator: std.mem.Allocator) void {
+        self.deinit(allocator);
+    }
+
+    fn isEnabled(self: *const TapRingBuffer) bool {
+        return self.buffer != null and self.capacity_frames > 0;
+    }
+
+    fn write(self: *TapRingBuffer, source: []const f32, frame_count: u32, channels: u8) void {
+        if (!self.isEnabled() or frame_count == 0 or channels == 0) return;
+        const tap_buffer = self.buffer orelse return;
+
+        const source_channels: usize = channels;
+        const tap_channels: usize = self.channels;
+        for (0..@as(usize, frame_count)) |frame| {
+            const src = frame * source_channels;
+            const left = source[src];
+            const right = if (channels > 1) source[src + 1] else left;
+
+            const dst_frame: usize = self.write_frame;
+            const dst = dst_frame * tap_channels;
+            tap_buffer[dst] = left;
+            if (tap_channels > 1) {
+                tap_buffer[dst + 1] = right;
+            }
+
+            const next = self.write_frame + 1;
+            self.write_frame = if (next >= self.capacity_frames) 0 else next;
+            if (self.frame_count < self.capacity_frames) {
+                self.frame_count += 1;
+            }
+        }
+    }
+
+    fn latestWindow(self: *const TapRingBuffer, requested_frames: u32) LatestWindow {
+        const available = @min(requested_frames, self.frame_count);
+        if (available == 0 or self.capacity_frames == 0) {
+            return .{ .start_frame = 0, .frame_count = 0 };
+        }
+
+        const start_frame = if (self.write_frame >= available)
+            self.write_frame - available
+        else
+            self.capacity_frames - (available - self.write_frame);
+
+        return .{ .start_frame = start_frame, .frame_count = available };
+    }
+
+    fn readLatest(self: *const TapRingBuffer, out: []f32, frame_count: u32, channels: u8) u32 {
+        @memset(out, 0);
+        if (!self.isEnabled() or self.frame_count == 0 or frame_count == 0 or channels == 0) return 0;
+
+        const tap_buffer = self.buffer orelse return 0;
+        const window = self.latestWindow(frame_count);
+        if (window.frame_count == 0) return 0;
+
+        const tap_channels: usize = self.channels;
+        const capacity_frames: usize = self.capacity_frames;
+
+        for (0..@as(usize, window.frame_count)) |i| {
+            const src_frame = (@as(usize, window.start_frame) + i) % capacity_frames;
+            const src = src_frame * tap_channels;
+            const left = tap_buffer[src];
+            const right = if (tap_channels > 1) tap_buffer[src + 1] else left;
+
+            const dst = i * @as(usize, channels);
+            if (channels == 1) {
+                out[dst] = clamp((left + right) * 0.5, -1, 1);
+                continue;
+            }
+
+            out[dst] = left;
+            out[dst + 1] = right;
+        }
+
+        return window.frame_count;
+    }
+
+    fn readLatestMono(self: *const TapRingBuffer, out: []f32, frame_count: u32) u32 {
+        @memset(out, 0);
+        if (!self.isEnabled() or self.frame_count == 0 or frame_count == 0) return 0;
+
+        const tap_buffer = self.buffer orelse return 0;
+        const window = self.latestWindow(frame_count);
+        if (window.frame_count == 0) return 0;
+
+        const tap_channels: usize = self.channels;
+        const capacity_frames: usize = self.capacity_frames;
+
+        for (0..@as(usize, window.frame_count)) |i| {
+            const src_frame = (@as(usize, window.start_frame) + i) % capacity_frames;
+            const src = src_frame * tap_channels;
+            const left = tap_buffer[src];
+            const right = if (tap_channels > 1) tap_buffer[src + 1] else left;
+            out[i] = clamp((left + right) * 0.5, -1, 1);
+        }
+
+        return window.frame_count;
+    }
+};
+
 const SoundGroup = struct {
     name: []u8,
     volume: f32 = 1,
@@ -102,12 +239,7 @@ pub const Engine = struct {
     has_device: bool = false,
     output_channels: u8 = 2,
     lock_miss_count: u32 = 0,
-    tap_enabled: bool = false,
-    tap_channels: u8 = 2,
-    tap_capacity_frames: u32 = 0,
-    tap_write_frame: u32 = 0,
-    tap_frame_count: u32 = 0,
-    tap_buffer: ?[]f32 = null,
+    tap: TapRingBuffer = .{},
 
     pub fn init(allocator: std.mem.Allocator, sample_rate: u32, output_channels: u8) Engine {
         const normalized_sample_rate = if (sample_rate == 0) default_sample_rate else sample_rate;
@@ -137,12 +269,7 @@ pub const Engine = struct {
             .has_device = false,
             .output_channels = output_channels,
             .lock_miss_count = 0,
-            .tap_enabled = false,
-            .tap_channels = 2,
-            .tap_capacity_frames = 0,
-            .tap_write_frame = 0,
-            .tap_frame_count = 0,
-            .tap_buffer = null,
+            .tap = .{},
         };
     }
 
@@ -179,10 +306,7 @@ pub const Engine = struct {
         self.groups.deinit(self.allocator);
         self.playback_devices.deinit(self.allocator);
 
-        if (self.tap_buffer) |buffer| {
-            self.allocator.free(buffer);
-            self.tap_buffer = null;
-        }
+        self.tap.deinit(self.allocator);
 
         if (self.context_initialized) {
             _ = c.ma_context_uninit(&self.context);
@@ -307,30 +431,7 @@ fn copyPlaybackDeviceName(device: *const c.ma_device_info, out_ptr: [*]u8, max_l
 }
 
 fn writeTapFrames(engine: *Engine, source: []const f32, frame_count: u32, channels: u8) void {
-    if (!engine.tap_enabled or frame_count == 0 or channels == 0) return;
-    const tap_buffer = engine.tap_buffer orelse return;
-    if (engine.tap_capacity_frames == 0) return;
-
-    const source_channels: usize = channels;
-    const tap_channels: usize = engine.tap_channels;
-    for (0..@as(usize, frame_count)) |frame| {
-        const src = frame * source_channels;
-        const left = source[src];
-        const right = if (channels > 1) source[src + 1] else left;
-
-        const dst_frame: usize = engine.tap_write_frame;
-        const dst = dst_frame * tap_channels;
-        tap_buffer[dst] = left;
-        if (tap_channels > 1) {
-            tap_buffer[dst + 1] = right;
-        }
-
-        const next = engine.tap_write_frame + 1;
-        engine.tap_write_frame = if (next >= engine.tap_capacity_frames) 0 else next;
-        if (engine.tap_frame_count < engine.tap_capacity_frames) {
-            engine.tap_frame_count += 1;
-        }
-    }
+    engine.tap.write(source, frame_count, channels);
 }
 
 fn clearVoice(voice: *Voice) void {
@@ -522,6 +623,73 @@ fn readEngineStereo(engine: *Engine, out_stereo: []f32, frame_count: u32) i32 {
     }
 
     return Status.ok;
+}
+
+fn isPowerOfTwo(value: u32) bool {
+    return value != 0 and (value & (value - 1)) == 0;
+}
+
+fn reverseBits(value: usize, bits: usize) usize {
+    var input = value;
+    var output: usize = 0;
+    for (0..bits) |_| {
+        output = (output << 1) | (input & 1);
+        input >>= 1;
+    }
+    return output;
+}
+
+fn fftInPlace(real: []f32, imag: []f32) void {
+    const n = real.len;
+    var bits: usize = 0;
+    var size = n;
+    while (size > 1) : (size >>= 1) {
+        bits += 1;
+    }
+
+    for (0..n) |i| {
+        const j = reverseBits(i, bits);
+        if (j > i) {
+            std.mem.swap(f32, &real[i], &real[j]);
+            std.mem.swap(f32, &imag[i], &imag[j]);
+        }
+    }
+
+    var len: usize = 2;
+    while (len <= n) : (len <<= 1) {
+        const half = len / 2;
+        const angle_step = -2.0 * std.math.pi / @as(f32, @floatFromInt(len));
+        var block: usize = 0;
+        while (block < n) : (block += len) {
+            for (0..half) |offset| {
+                const angle = angle_step * @as(f32, @floatFromInt(offset));
+                const wr = @cos(angle);
+                const wi = @sin(angle);
+                const even = block + offset;
+                const odd = even + half;
+
+                const tr = wr * real[odd] - wi * imag[odd];
+                const ti = wr * imag[odd] + wi * real[odd];
+                const ur = real[even];
+                const ui = imag[even];
+
+                real[even] = ur + tr;
+                imag[even] = ui + ti;
+                real[odd] = ur - tr;
+                imag[odd] = ui - ti;
+            }
+        }
+    }
+}
+
+fn applyHannWindow(samples: []f32, frames_read: u32) void {
+    if (samples.len <= 1) return;
+    const denom = @as(f32, @floatFromInt(samples.len - 1));
+    const readable = @min(@as(usize, frames_read), samples.len);
+    for (0..readable) |i| {
+        const phase = (2.0 * std.math.pi * @as(f32, @floatFromInt(i))) / denom;
+        samples[i] *= 0.5 * (1.0 - @cos(phase));
+    }
 }
 
 pub fn create(allocator: std.mem.Allocator, options_ptr: ?*const CreateOptions) ?*Engine {
@@ -970,32 +1138,15 @@ pub fn enableTap(engine: *Engine, enabled: bool, capacity_frames: u32) i32 {
     defer e.lock.unlock();
 
     if (!enabled) {
-        e.tap_enabled = false;
-        e.tap_capacity_frames = 0;
-        e.tap_write_frame = 0;
-        e.tap_frame_count = 0;
-        if (e.tap_buffer) |buffer| {
-            e.allocator.free(buffer);
-            e.tap_buffer = null;
-        }
+        e.tap.disable(e.allocator);
         return Status.ok;
     }
 
     if (capacity_frames == 0) return Status.err_invalid;
-
-    const sample_count = std.math.mul(usize, @as(usize, capacity_frames), @as(usize, e.tap_channels)) catch return Status.err_no_space;
-    const next_buffer = e.allocator.alloc(f32, sample_count) catch return Status.err_no_space;
-    @memset(next_buffer, 0);
-
-    if (e.tap_buffer) |buffer| {
-        e.allocator.free(buffer);
-    }
-
-    e.tap_buffer = next_buffer;
-    e.tap_enabled = true;
-    e.tap_capacity_frames = capacity_frames;
-    e.tap_write_frame = 0;
-    e.tap_frame_count = 0;
+    e.tap.enable(e.allocator, capacity_frames) catch |err| switch (err) {
+        error.InvalidInput => return Status.err_invalid,
+        else => return Status.err_no_space,
+    };
     return Status.ok;
 }
 
@@ -1008,48 +1159,45 @@ pub fn readTap(engine: *Engine, out_ptr: ?[*]f32, frame_count: u32, channels: u8
     defer e.lock.unlock();
 
     const out = @as([*]f32, @ptrCast(out_ptr.?))[0 .. @as(usize, frame_count) * @as(usize, channels)];
+    out_frames_read.?.* = e.tap.readLatest(out, frame_count, channels);
+    return Status.ok;
+}
+
+pub fn analyzeSpectrum(engine: *Engine, out_ptr: ?[*]f32, fft_size: u32, bin_count: u32, out_frames_read: ?*u32) i32 {
+    if (out_ptr == null or out_frames_read == null) return Status.err_invalid;
+    if (fft_size < 2 or !isPowerOfTwo(fft_size)) return Status.err_invalid;
+
+    const expected_bins = fft_size / 2;
+    if (bin_count < expected_bins) return Status.err_invalid;
+
+    const e = engine;
+    const out = @as([*]f32, @ptrCast(out_ptr.?))[0..@as(usize, bin_count)];
     @memset(out, 0);
+    out_frames_read.?.* = 0;
 
-    if (!e.tap_enabled or e.tap_capacity_frames == 0 or e.tap_frame_count == 0) {
-        out_frames_read.?.* = 0;
-        return Status.ok;
+    const fft_size_usize: usize = @intCast(fft_size);
+    const real = e.allocator.alloc(f32, fft_size_usize) catch return Status.err_no_space;
+    defer e.allocator.free(real);
+    const imag = e.allocator.alloc(f32, fft_size_usize) catch return Status.err_no_space;
+    defer e.allocator.free(imag);
+    @memset(imag, 0);
+
+    e.lock.lock();
+    const frames_read = e.tap.readLatestMono(real, fft_size);
+    e.lock.unlock();
+
+    out_frames_read.?.* = frames_read;
+    if (frames_read == 0) return Status.ok;
+
+    applyHannWindow(real, frames_read);
+    fftInPlace(real, imag);
+
+    const scale = 2.0 / @as(f32, @floatFromInt(fft_size));
+    for (0..@as(usize, expected_bins)) |i| {
+        const magnitude = @sqrt(real[i] * real[i] + imag[i] * imag[i]) * scale;
+        out[i] = magnitude;
     }
 
-    const tap_buffer = e.tap_buffer orelse {
-        out_frames_read.?.* = 0;
-        return Status.ok;
-    };
-
-    const available = @min(frame_count, e.tap_frame_count);
-    if (available == 0) {
-        out_frames_read.?.* = 0;
-        return Status.ok;
-    }
-
-    const tap_channels: usize = e.tap_channels;
-    const capacity_frames: usize = e.tap_capacity_frames;
-    const start_frame_u32 = if (e.tap_write_frame >= available)
-        e.tap_write_frame - available
-    else
-        e.tap_capacity_frames - (available - e.tap_write_frame);
-
-    for (0..@as(usize, available)) |i| {
-        const src_frame = (@as(usize, start_frame_u32) + i) % capacity_frames;
-        const src = src_frame * tap_channels;
-        const left = tap_buffer[src];
-        const right = if (tap_channels > 1) tap_buffer[src + 1] else left;
-
-        const dst = i * @as(usize, channels);
-        if (channels == 1) {
-            out[dst] = clamp((left + right) * 0.5, -1, 1);
-            continue;
-        }
-
-        out[dst] = left;
-        out[dst + 1] = right;
-    }
-
-    out_frames_read.?.* = available;
     return Status.ok;
 }
 

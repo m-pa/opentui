@@ -4,6 +4,9 @@ import type { Pointer } from "./platform/ffi.js"
 import { resolveRenderLib, type RenderLib } from "./zig.js"
 import type { AudioStats } from "./zig-structs.js"
 
+const DEFAULT_AUDIO_SAMPLE_RATE = 48_000
+const DEFAULT_FFT_SIZE = 2048
+
 export interface AudioSetupOptions {
   autoStart?: boolean
   sampleRate?: number
@@ -36,6 +39,17 @@ export interface AudioPlayOptions {
   groupId?: number
 }
 
+export interface AudioSpectrumOptions {
+  fftSize?: number
+}
+
+export interface AudioSpectrum {
+  magnitudes: Float32Array
+  framesRead: number
+  sampleRate: number
+  binFrequency: number
+}
+
 export type AudioGroup = number
 export type AudioVoice = number
 export type AudioSound = number
@@ -63,6 +77,7 @@ export type AudioAction =
   | "mixFrames"
   | "enableTap"
   | "readTapFrames"
+  | "analyzeSpectrum"
   | "listPlaybackDevices"
   | "selectPlaybackDevice"
   | "clearPlaybackDeviceSelection"
@@ -89,6 +104,10 @@ function toBytes(data: Uint8Array | ArrayBuffer): Uint8Array {
   return data instanceof Uint8Array ? data : new Uint8Array(data)
 }
 
+function isPowerOfTwo(value: number): boolean {
+  return value > 0 && Number.isInteger(Math.log2(value))
+}
+
 export class Audio extends EventEmitter<AudioEvents> {
   static create(options: AudioSetupOptions = {}): Audio {
     return new Audio(resolveRenderLib(), options)
@@ -96,6 +115,7 @@ export class Audio extends EventEmitter<AudioEvents> {
 
   private readonly lib: RenderLib
   private readonly defaultStartOptions: AudioStartOptions | undefined
+  private readonly sampleRate: number
   private engine: Pointer | null = null
   private readonly groups = new Map<string, number>()
   private playbackStarted = false
@@ -105,11 +125,13 @@ export class Audio extends EventEmitter<AudioEvents> {
     super()
     this.lib = lib
     this.defaultStartOptions = options.startOptions
+    const sampleRate = options.sampleRate == null ? DEFAULT_AUDIO_SAMPLE_RATE : Math.max(0, Math.trunc(options.sampleRate))
+    this.sampleRate = sampleRate === 0 ? DEFAULT_AUDIO_SAMPLE_RATE : sampleRate
     const createOptions =
       options.sampleRate == null && options.playbackChannels == null
         ? undefined
         : {
-            sampleRate: options.sampleRate == null ? undefined : Math.max(0, Math.trunc(options.sampleRate)),
+            sampleRate: options.sampleRate == null ? undefined : this.sampleRate,
             playbackChannels:
               options.playbackChannels == null ? undefined : Math.max(0, Math.trunc(options.playbackChannels)),
           }
@@ -387,6 +409,34 @@ export class Audio extends EventEmitter<AudioEvents> {
       return null
     }
     return { frames: output, framesRead: result.framesRead }
+  }
+
+  analyzeSpectrum(options: AudioSpectrumOptions = {}): AudioSpectrum | null {
+    const engine = this.engine
+    if (!engine) {
+      this.emitError("analyzeSpectrum", undefined, "Audio engine unavailable during analyzeSpectrum")
+      return null
+    }
+
+    const fftSize = Math.trunc(options.fftSize ?? DEFAULT_FFT_SIZE)
+    if (!Number.isSafeInteger(fftSize) || fftSize < 2 || !isPowerOfTwo(fftSize)) {
+      this.emitError("analyzeSpectrum", undefined, `Invalid FFT size ${options.fftSize ?? DEFAULT_FFT_SIZE}`)
+      return null
+    }
+
+    const magnitudes = new Float32Array(fftSize / 2)
+    const result = this.lib.audioAnalyzeSpectrum(engine, magnitudes, fftSize, magnitudes.length)
+    if (result.status !== 0) {
+      this.emitError("analyzeSpectrum", result.status)
+      return null
+    }
+
+    return {
+      magnitudes,
+      framesRead: result.framesRead,
+      sampleRate: this.sampleRate,
+      binFrequency: this.sampleRate / fftSize,
+    }
   }
 
   listPlaybackDevices(): AudioPlaybackDevice[] | null {

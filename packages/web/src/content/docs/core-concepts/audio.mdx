@@ -117,9 +117,10 @@ if (!audio.start()) {
 | `getStats()`                            | Returns `soundsLoaded`, `voicesActive`, `framesMixed`, `lockMisses`, `lastPeak`, `lastRms` |
 | `enableTap(capacityFrames=8192)`        | Enable a fixed-size native ring buffer of recent mixed frames                              |
 | `readTapFrames(frameCount, channels=2)` | Copy the latest tapped frames; returns `{ frames, framesRead }`                            |
+| `analyzeSpectrum({ fftSize=2048 })`     | Run a native FFT over recent tap frames; returns magnitude bins                            |
 | `disableTap()`                          | Free the tap buffer                                                                        |
 
-The tap is disabled by default. When enabled, it stores the latest frames and overwrites old data; reads do not drain it. OpenTUI does not compute FFT natively. For spectrum visualization, read tap frames and run FFT in TypeScript.
+The tap is disabled by default. When enabled, it stores the latest frames in a native ring buffer and overwrites old data; reads do not drain it. Use `analyzeSpectrum()` for spectrum visualization without running FFT in TypeScript.
 
 ## Start options
 

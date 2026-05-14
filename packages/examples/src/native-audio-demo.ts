@@ -17,7 +17,6 @@ import {
   type KeyEvent,
   type SelectOption,
 } from "@opentui/core"
-import FFT from "fft.js"
 import type { OptimizedBuffer } from "@opentui/core"
 import { setupCommonDemoKeys } from "./lib/standalone-keys.js"
 
@@ -83,18 +82,10 @@ const FILE_PICKER_TITLE_HEIGHT = 3
 const FILE_PICKER_SELECT_HEIGHT = FILE_PICKER_HEIGHT - FILE_PICKER_TITLE_HEIGHT - 4
 const SUPPORTED_AUDIO_FILE_EXTENSIONS = new Set([".flac", ".mp3", ".wav", ".wave"])
 
-const fft = new FFT(FFT_SIZE)
-const fftInput = new Float32Array(FFT_SIZE)
-const fftOut = fft.createComplexArray()
-const fftWindow = new Float32Array(FFT_SIZE)
 const fftDisplay = new Float32Array(FFT_BANDS)
 const fftBandLevels = new Float32Array(FFT_BANDS)
 const fftVizBars = new Float32Array(VIS_BARS)
 const fftVizPeak = new Float32Array(VIS_BARS)
-
-for (let i = 0; i < FFT_SIZE; i += 1) {
-  fftWindow[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (FFT_SIZE - 1)))
-}
 
 let root: BoxRenderable | null = null
 let titleText: TextRenderable | null = null
@@ -383,19 +374,9 @@ function rangeBar(value: number, width: number = FFT_BAR_WIDTH): string {
   return `[${"#".repeat(filled)}${"-".repeat(width - filled)}]`
 }
 
-function computeSpectrum(pcm: Float32Array, channels: number): string {
-  const stride = Math.max(1, channels)
-  for (let i = 0; i < FFT_SIZE; i += 1) {
-    const sampleIndex = i * stride
-    const left = pcm[sampleIndex] ?? 0
-    const right = channels > 1 ? (pcm[sampleIndex + 1] ?? left) : left
-    fftInput[i] = (left + right) * 0.5 * fftWindow[i]
-  }
-
-  fft.realTransform(fftOut, fftInput)
-
-  const nyquistBins = FFT_SIZE / 2
-  const nyquistHz = activeSampleRate / 2
+function computeSpectrum(magnitudes: Float32Array, sampleRate: number): string {
+  const nyquistBins = magnitudes.length
+  const nyquistHz = sampleRate / 2
   const minHz = 30
   const logMin = Math.log(minHz)
   const logMax = Math.log(nyquistHz)
@@ -411,10 +392,7 @@ function computeSpectrum(pcm: Float32Array, channels: number): string {
     const start = Math.max(1, Math.floor((hz0 / nyquistHz) * (nyquistBins - 1)))
     const end = Math.min(nyquistBins, Math.max(start + 1, Math.ceil((hz1 / nyquistHz) * (nyquistBins - 1))))
     for (let i = start; i < end; i += 1) {
-      const re = fftOut[i * 2] ?? 0
-      const im = fftOut[i * 2 + 1] ?? 0
-      const mag = Math.sqrt(re * re + im * im)
-      sum += mag
+      sum += magnitudes[i] ?? 0
       count += 1
     }
     buckets[bucket] = count > 0 ? sum / count : 0
@@ -1135,7 +1113,7 @@ function updateAudioView(deltaMs: number = 16): void {
 
   mixOfflineFrame(deltaMs)
 
-  const analysis = audio.readTapFrames(FFT_SIZE, 2)
+  const analysis = audio.analyzeSpectrum({ fftSize: FFT_SIZE })
   const stats = audio.getStats()
   if (!stats) {
     statsText.content = "Stats unavailable"
@@ -1149,7 +1127,7 @@ function updateAudioView(deltaMs: number = 16): void {
   const tapFrames = analysis?.framesRead ?? 0
   const spectrum =
     tapFrames > 0 && analysis
-      ? computeSpectrum(analysis.frames, 2)
+      ? computeSpectrum(analysis.magnitudes, analysis.sampleRate)
       : "[------][------][------][------][------][------][------][------]"
   updateKickDetector(deltaMs)
   bgVizIntensity = Math.max(0.2, Math.min(1, fourHundredBandLevel * 1.35))

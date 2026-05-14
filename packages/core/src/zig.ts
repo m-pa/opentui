@@ -1240,6 +1240,10 @@ function getOpenTUILib(libPath?: string) {
       args: ["ptr", "ptr", "u32", "u8", "ptr"],
       returns: "i32",
     },
+    audioAnalyzeSpectrum: {
+      args: ["ptr", "ptr", "u32", "u32", "ptr"],
+      returns: "i32",
+    },
     audioGetStats: {
       args: ["ptr", "ptr"],
       returns: "i32",
@@ -1572,6 +1576,12 @@ export interface AudioEngineLib {
     outBuffer: Float32Array,
     frameCount: number,
     channels: number,
+  ) => { status: number; framesRead: number }
+  audioAnalyzeSpectrum: (
+    engine: Pointer,
+    outBuffer: Float32Array,
+    fftSize: number,
+    binCount: number,
   ) => { status: number; framesRead: number }
   audioGetStats: (engine: Pointer) => AudioStats | null
 }
@@ -4183,6 +4193,27 @@ class FFIRenderLib implements RenderLib {
       ptr(outBuffer),
       frameCount,
       channels,
+      ptr(outFramesReadBuffer),
+    )
+    if (status !== 0) {
+      return { status, framesRead: 0 }
+    }
+    const view = new Uint32Array(outFramesReadBuffer)
+    return { status, framesRead: view[0] ?? 0 }
+  }
+
+  public audioAnalyzeSpectrum(
+    engine: Pointer,
+    outBuffer: Float32Array,
+    fftSize: number,
+    binCount: number,
+  ): { status: number; framesRead: number } {
+    const outFramesReadBuffer = new ArrayBuffer(4)
+    const status = this.opentui.symbols.audioAnalyzeSpectrum(
+      engine,
+      ptr(outBuffer),
+      fftSize,
+      binCount,
       ptr(outFramesReadBuffer),
     )
     if (status !== 0) {

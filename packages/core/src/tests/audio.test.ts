@@ -236,6 +236,48 @@ test("Audio tap mirrors mixed frames without consuming stream", () => {
   expect(audio.disableTap()).toBe(true)
 })
 
+test("Audio analyzes native spectrum from tap frames", () => {
+  const audio = Audio.create({ autoStart: false })
+  instances.push(audio)
+
+  const fftSize = 1024
+  const targetBin = 12
+  const frequency = (SAMPLE_RATE * targetBin) / fftSize
+  const wave = Array.from({ length: fftSize }, (_, index) => Math.sin((Math.PI * 2 * frequency * index) / SAMPLE_RATE) * 0.8)
+  const sound = audio.loadSound(buildMonoPcm16Wav(wave))
+  expect(sound).not.toBeNull()
+  if (sound == null) return
+
+  expect(audio.startMixer()).toBe(true)
+  expect(audio.enableTap(fftSize)).toBe(true)
+  const voice = audio.play(sound, { volume: 1, pan: 0, loop: true })
+  expect(voice).not.toBeNull()
+
+  const mixed = audio.mixFrames(fftSize, 2)
+  expect(mixed).not.toBeNull()
+
+  const spectrum = audio.analyzeSpectrum({ fftSize })
+  expect(spectrum).not.toBeNull()
+  if (!spectrum) return
+
+  expect(spectrum.framesRead).toBe(fftSize)
+  expect(spectrum.magnitudes.length).toBe(fftSize / 2)
+  expect(spectrum.binFrequency).toBe(SAMPLE_RATE / fftSize)
+
+  let peakIndex = 1
+  let peakValue = 0
+  for (let index = 1; index < spectrum.magnitudes.length; index += 1) {
+    const value = spectrum.magnitudes[index] ?? 0
+    if (value > peakValue) {
+      peakValue = value
+      peakIndex = index
+    }
+  }
+
+  expect(peakValue).toBeGreaterThan(0.1)
+  expect(Math.abs(peakIndex - targetBin)).toBeLessThanOrEqual(1)
+})
+
 test("Audio supports immutable custom sample rate", () => {
   const audio = Audio.create({ autoStart: false, sampleRate: 44_100, playbackChannels: 1 })
   instances.push(audio)
