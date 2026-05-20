@@ -276,6 +276,7 @@ export const ReserveInfoStruct = defineStruct(
 export type AudioCreateOptions = {
   sampleRate?: number
   playbackChannels?: number
+  maxVoices?: number
 }
 
 export type AudioStartOptions = {
@@ -315,6 +316,7 @@ export type AudioStats = {
 export const AudioCreateOptionsStruct = defineStruct([
   ["sampleRate", "u32", { default: 48_000 }],
   ["playbackChannels", "u32", { default: 2 }],
+  ["maxVoices", "u32", { default: 32 }],
 ])
 
 export const AudioStartOptionsStruct = defineStruct([

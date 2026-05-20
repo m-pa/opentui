@@ -12,13 +12,15 @@ pub const Status = struct {
     pub const err_device: i32 = -5;
 };
 
-pub const max_voices: usize = 32;
+pub const default_max_voices: u32 = 32;
+pub const max_configurable_voices: u32 = 4096;
 pub const default_sample_rate: u32 = 48_000;
 pub const default_playback_channels: u32 = 2;
 
 pub const CreateOptions = extern struct {
     sample_rate: u32 = default_sample_rate,
     playback_channels: u32 = default_playback_channels,
+    max_voices: u32 = default_max_voices,
 };
 
 pub const StartOptions = extern struct {
@@ -231,7 +233,7 @@ pub const Engine = struct {
     groups: std.ArrayList(*SoundGroup),
     playback_devices: std.ArrayList(c.ma_device_info),
     selected_playback_index: ?u32 = null,
-    voices: [max_voices]Voice,
+    voices: []Voice,
     master_volume: f32,
     sample_rate: u32,
     stats: Stats,
@@ -241,7 +243,7 @@ pub const Engine = struct {
     lock_miss_count: u32 = 0,
     tap: TapRingBuffer = .{},
 
-    pub fn init(allocator: std.mem.Allocator, sample_rate: u32, output_channels: u8) Engine {
+    pub fn init(allocator: std.mem.Allocator, sample_rate: u32, output_channels: u8, voices: []Voice) Engine {
         const normalized_sample_rate = if (sample_rate == 0) default_sample_rate else sample_rate;
         return .{
             .allocator = allocator,
@@ -254,7 +256,7 @@ pub const Engine = struct {
             .groups = .empty,
             .playback_devices = .empty,
             .selected_playback_index = null,
-            .voices = [_]Voice{.{}} ** max_voices,
+            .voices = voices,
             .master_volume = 1,
             .sample_rate = normalized_sample_rate,
             .stats = .{
@@ -283,9 +285,11 @@ pub const Engine = struct {
             self.has_device = false;
         }
 
-        for (&self.voices) |*voice| {
+        for (self.voices) |*voice| {
             clearVoice(voice);
         }
+        self.allocator.free(self.voices);
+        self.voices = &.{};
 
         for (self.groups.items) |group| {
             if (group.initialized) {
@@ -569,7 +573,7 @@ fn initDefaultGroup(engine: *Engine) !void {
 }
 
 fn reapFinishedVoices(engine: *Engine) void {
-    for (&engine.voices) |*voice| {
+    for (engine.voices) |*voice| {
         if (!voice.active or !voice.sound_ready) continue;
 
         const playing = c.ma_sound_is_playing(&voice.sound) != c.MA_FALSE;
@@ -692,29 +696,43 @@ fn applyHannWindow(samples: []f32, frames_read: u32) void {
     }
 }
 
-pub fn create(allocator: std.mem.Allocator, options_ptr: ?*const CreateOptions) ?*Engine {
+fn createInternal(allocator: std.mem.Allocator, options_ptr: ?*const CreateOptions) !*Engine {
     const options = if (options_ptr) |opts| opts.* else CreateOptions{};
     const sample_rate = if (options.sample_rate == 0) default_sample_rate else options.sample_rate;
     const playback_channels = if (options.playback_channels == 0) default_playback_channels else options.playback_channels;
+    const requested_max_voices = if (options.max_voices == 0) default_max_voices else options.max_voices;
     const max_channels: u32 = @intCast(c.MA_MAX_CHANNELS);
-    if (playback_channels == 0 or playback_channels > max_channels) return null;
-    const output_channels = std.math.cast(u8, playback_channels) orelse return null;
+    if (playback_channels == 0 or playback_channels > max_channels) return error.InvalidInput;
+    if (requested_max_voices == 0 or requested_max_voices > max_configurable_voices) return error.InvalidInput;
+    const output_channels = std.math.cast(u8, playback_channels) orelse return error.InvalidInput;
+    const voice_count = std.math.cast(usize, requested_max_voices) orelse return error.InvalidInput;
 
-    const engine = allocator.create(Engine) catch return null;
+    const engine = try allocator.create(Engine);
     errdefer allocator.destroy(engine);
-    engine.* = Engine.init(allocator, sample_rate, output_channels);
+
+    const voices = try allocator.alloc(Voice, voice_count);
+    for (voices) |*voice| {
+        voice.* = .{};
+    }
+
+    engine.* = Engine.init(allocator, sample_rate, output_channels, voices);
+    errdefer engine.deinit();
 
     var config = c.ma_engine_config_init();
     config.noDevice = c.MA_TRUE;
     config.channels = 2;
     config.sampleRate = sample_rate;
 
-    if (c.ma_engine_init(&config, &engine.core) != c.MA_SUCCESS) return null;
+    if (c.ma_engine_init(&config, &engine.core) != c.MA_SUCCESS) return error.DeviceInitFailed;
     engine.core_initialized = true;
     engine.sample_rate = c.ma_engine_get_sample_rate(&engine.core);
 
-    initDefaultGroup(engine) catch return null;
+    try initDefaultGroup(engine);
     return engine;
+}
+
+pub fn create(allocator: std.mem.Allocator, options_ptr: ?*const CreateOptions) ?*Engine {
+    return createInternal(allocator, options_ptr) catch null;
 }
 
 pub fn destroy(engine: *Engine) void {
@@ -911,7 +929,7 @@ pub fn unload(engine: *Engine, sound_id: u32) i32 {
     const sound = &e.sounds.items[sound_index];
     if (!sound.loaded) return Status.err_not_found;
 
-    for (&e.voices) |*voice| {
+    for (e.voices) |*voice| {
         if (voice.active and voice.sound_index == sound_index) {
             clearVoice(voice);
         }

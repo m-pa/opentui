@@ -6,12 +6,12 @@ import type { AudioStats } from "./zig-structs.js"
 
 const DEFAULT_AUDIO_SAMPLE_RATE = 48_000
 const DEFAULT_FFT_SIZE = 2048
-const playSound = Symbol("Audio.playSound")
 
 export interface AudioSetupOptions {
   autoStart?: boolean
   sampleRate?: number
   playbackChannels?: number
+  maxVoices?: number
   startOptions?: AudioStartOptions
 }
 
@@ -68,7 +68,7 @@ export class AudioSound {
   }
 
   play(options?: AudioPlayOptions): AudioVoice | null {
-    return this.owner[playSound](this, options)
+    return playSound(this.owner, this, options)
   }
 
   resolveId(owner: Audio): number | null {
@@ -193,6 +193,10 @@ function isPowerOfTwo(value: number): boolean {
   return value > 0 && Number.isInteger(Math.log2(value))
 }
 
+function playSound(owner: Audio, sound: AudioSound, options?: AudioPlayOptions): AudioVoice | null {
+  return owner.playSoundInternal(sound, options)
+}
+
 export class Audio extends EventEmitter<AudioEvents> {
   static create(options: AudioSetupOptions = {}): Audio {
     return new Audio(resolveRenderLib(), options)
@@ -215,12 +219,13 @@ export class Audio extends EventEmitter<AudioEvents> {
     const sampleRate = options.sampleRate == null ? DEFAULT_AUDIO_SAMPLE_RATE : Math.max(0, Math.trunc(options.sampleRate))
     this.sampleRate = sampleRate === 0 ? DEFAULT_AUDIO_SAMPLE_RATE : sampleRate
     const createOptions =
-      options.sampleRate == null && options.playbackChannels == null
+      options.sampleRate == null && options.playbackChannels == null && options.maxVoices == null
         ? undefined
         : {
             sampleRate: options.sampleRate == null ? undefined : this.sampleRate,
             playbackChannels:
               options.playbackChannels == null ? undefined : Math.max(0, Math.trunc(options.playbackChannels)),
+            maxVoices: options.maxVoices == null ? undefined : Math.max(0, Math.trunc(options.maxVoices)),
           }
     this.engine = this.lib.createAudioEngine(createOptions)
     if (!this.engine) {
@@ -410,7 +415,7 @@ export class Audio extends EventEmitter<AudioEvents> {
     return group
   }
 
-  [playSound](sound: AudioSound, options?: AudioPlayOptions): AudioVoice | null {
+  playSoundInternal(sound: AudioSound, options?: AudioPlayOptions): AudioVoice | null {
     const soundId = this.getSoundId("play", sound)
     if (soundId == null) return null
 

@@ -296,7 +296,7 @@ function runBurstScenario(audio: Audio, sound: AudioSound, scenario: BurstScenar
 }
 
 function main(): void {
-  const audio = Audio.create({ autoStart: false })
+  const audio = Audio.create({ autoStart: false, maxVoices: MAX_AUDIO_VOICES })
 
   if (!audio.startMixer()) {
     throw new Error("audio.startMixer() failed")

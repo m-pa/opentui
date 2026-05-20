@@ -136,11 +136,11 @@ test("Audio unloads sounds and invalidates old handles", () => {
   expect(firstVoice).not.toBeNull()
   expect(audio.getStats()?.voicesActive).toBeGreaterThan(0)
 
-  expect(audio.unloadSound(first)).toBe(true)
+  expect(first.unload()).toBe(true)
   expect(audio.getStats()?.soundsLoaded).toBe(0)
   expect(audio.getStats()?.voicesActive).toBe(0)
   expect(first.play({ volume: 1 })).toBeNull()
-  expect(audio.unloadSound(first)).toBe(false)
+  expect(first.unload()).toBe(false)
 
   const second = audio.loadSound(buildMonoPcm16Wav([0.6, -0.2, 0.4, -0.4, 0.3, -0.1]))
   expect(second).not.toBeNull()
@@ -149,6 +149,22 @@ test("Audio unloads sounds and invalidates old handles", () => {
 
   const secondVoice = second.play({ volume: 1, pan: 0, loop: false })
   expect(secondVoice).not.toBeNull()
+})
+
+test("Audio respects custom max voice count", () => {
+  const audio = Audio.create({ autoStart: false, maxVoices: 1 })
+  audio.on("error", () => {})
+  instances.push(audio)
+
+  const sound = audio.loadSound(buildMonoPcm16Wav([0.6, -0.2, 0.4, -0.4]))
+  expect(sound).not.toBeNull()
+  if (sound == null) return
+
+  expect(audio.startMixer()).toBe(true)
+  const firstVoice = sound.play({ volume: 1, loop: true })
+  expect(firstVoice).not.toBeNull()
+  expect(sound.play({ volume: 1, loop: true })).toBeNull()
+  expect(audio.getStats()?.voicesActive).toBe(1)
 })
 
 test("Audio mixes into mono and multichannel output buffers", () => {

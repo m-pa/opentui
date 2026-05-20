@@ -106,6 +106,16 @@ test "audio - create applies custom sample rate and playback channels" {
     try testing.expectEqual(@as(u8, 4), engine.output_channels);
 }
 
+test "audio - create applies custom max voices" {
+    var options = audio.CreateOptions{
+        .max_voices = 2,
+    };
+    const engine = try createEngine(&options);
+    defer audio.destroy(engine);
+
+    try testing.expectEqual(@as(usize, 2), engine.voices.len);
+}
+
 test "audio - destroy works after create" {
     const engine = try createEngine(null);
     audio.destroy(engine);
@@ -246,6 +256,24 @@ test "audio - play valid sound returns voice id" {
     try expectStatusOk(audio.play(engine, sound_id, &options, &voice_id));
     try testing.expect(voice_id > 0);
     try testing.expect(engine.voices[voice_id - 1].active);
+}
+
+test "audio - play respects configured voice limit" {
+    var create_options = audio.CreateOptions{
+        .max_voices = 1,
+    };
+    const engine = try createEngine(&create_options);
+    defer audio.destroy(engine);
+
+    try expectStatusOk(audio.startMixer(engine));
+    const sound_id = try loadSoundFromSamples(engine, 1, &.{ 1000, -1000, 1000, -1000 });
+
+    const options = audio.VoiceOptions{ .volume = 1, .pan = 0, .loop = true, .group_id = 0 };
+    var first_voice_id: u32 = 0;
+    var second_voice_id: u32 = 0;
+
+    try expectStatusOk(audio.play(engine, sound_id, &options, &first_voice_id));
+    try testing.expectEqual(audio.Status.err_no_space, audio.play(engine, sound_id, &options, &second_voice_id));
 }
 
 test "audio - stopVoice stops active voice" {
