@@ -242,6 +242,9 @@ pub const Engine = struct {
     output_channels: u8 = 2,
     lock_miss_count: u32 = 0,
     tap: TapRingBuffer = .{},
+    spectrum_lock: std.Thread.Mutex = .{},
+    spectrum_real: ?[]f32 = null,
+    spectrum_imag: ?[]f32 = null,
 
     pub fn init(allocator: std.mem.Allocator, sample_rate: u32, output_channels: u8, voices: []Voice) Engine {
         const normalized_sample_rate = if (sample_rate == 0) default_sample_rate else sample_rate;
@@ -272,6 +275,9 @@ pub const Engine = struct {
             .output_channels = output_channels,
             .lock_miss_count = 0,
             .tap = .{},
+            .spectrum_lock = .{},
+            .spectrum_real = null,
+            .spectrum_imag = null,
         };
     }
 
@@ -311,6 +317,15 @@ pub const Engine = struct {
         self.playback_devices.deinit(self.allocator);
 
         self.tap.deinit(self.allocator);
+
+        if (self.spectrum_real) |scratch| {
+            self.allocator.free(scratch);
+            self.spectrum_real = null;
+        }
+        if (self.spectrum_imag) |scratch| {
+            self.allocator.free(scratch);
+            self.spectrum_imag = null;
+        }
 
         if (self.context_initialized) {
             _ = c.ma_context_uninit(&self.context);
@@ -694,6 +709,34 @@ fn applyHannWindow(samples: []f32, frames_read: u32) void {
         const phase = (2.0 * std.math.pi * @as(f32, @floatFromInt(i))) / denom;
         samples[i] *= 0.5 * (1.0 - @cos(phase));
     }
+}
+
+const SpectrumScratch = struct {
+    real: []f32,
+    imag: []f32,
+};
+
+fn ensureSpectrumScratch(engine: *Engine, fft_size: usize) !SpectrumScratch {
+    if (engine.spectrum_real == null or engine.spectrum_real.?.len < fft_size) {
+        const next_real = if (engine.spectrum_real) |scratch|
+            try engine.allocator.realloc(scratch, fft_size)
+        else
+            try engine.allocator.alloc(f32, fft_size);
+        engine.spectrum_real = next_real;
+    }
+
+    if (engine.spectrum_imag == null or engine.spectrum_imag.?.len < fft_size) {
+        const next_imag = if (engine.spectrum_imag) |scratch|
+            try engine.allocator.realloc(scratch, fft_size)
+        else
+            try engine.allocator.alloc(f32, fft_size);
+        engine.spectrum_imag = next_imag;
+    }
+
+    return .{
+        .real = engine.spectrum_real.?[0..fft_size],
+        .imag = engine.spectrum_imag.?[0..fft_size],
+    };
 }
 
 fn createInternal(allocator: std.mem.Allocator, options_ptr: ?*const CreateOptions) !*Engine {
@@ -1194,25 +1237,25 @@ pub fn analyzeSpectrum(engine: *Engine, out_ptr: ?[*]f32, fft_size: u32, bin_cou
     out_frames_read.?.* = 0;
 
     const fft_size_usize: usize = @intCast(fft_size);
-    const real = e.allocator.alloc(f32, fft_size_usize) catch return Status.err_no_space;
-    defer e.allocator.free(real);
-    const imag = e.allocator.alloc(f32, fft_size_usize) catch return Status.err_no_space;
-    defer e.allocator.free(imag);
-    @memset(imag, 0);
+    e.spectrum_lock.lock();
+    defer e.spectrum_lock.unlock();
+
+    const scratch = ensureSpectrumScratch(e, fft_size_usize) catch return Status.err_no_space;
+    @memset(scratch.imag, 0);
 
     e.lock.lock();
-    const frames_read = e.tap.readLatestMono(real, fft_size);
+    const frames_read = e.tap.readLatestMono(scratch.real, fft_size);
     e.lock.unlock();
 
     out_frames_read.?.* = frames_read;
     if (frames_read == 0) return Status.ok;
 
-    applyHannWindow(real, frames_read);
-    fftInPlace(real, imag);
+    applyHannWindow(scratch.real, frames_read);
+    fftInPlace(scratch.real, scratch.imag);
 
     const scale = 2.0 / @as(f32, @floatFromInt(fft_size));
     for (0..@as(usize, expected_bins)) |i| {
-        const magnitude = @sqrt(real[i] * real[i] + imag[i] * imag[i]) * scale;
+        const magnitude = @sqrt(scratch.real[i] * scratch.real[i] + scratch.imag[i] * scratch.imag[i]) * scale;
         out[i] = magnitude;
     }
 
