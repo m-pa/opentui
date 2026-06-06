@@ -179,7 +179,12 @@ export class AccessibilityIpcClient extends EventEmitter {
     if (message.type !== "action") return
 
     try {
-      await this.options.handleAction?.((message as AccessibilityIpcActionMessage).action)
+      const action = (message as AccessibilityIpcActionMessage).action
+      if (action.type === "snapshot") {
+        this.sendSnapshot()
+      } else {
+        await this.options.handleAction?.(action)
+      }
       this.sendActionResult({ actionId: message.actionId, ok: true })
     } catch (error) {
       this.sendActionResult({

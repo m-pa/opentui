@@ -338,4 +338,41 @@ describe("accessibility snapshots", () => {
       }),
     ])
   })
+
+  test("handles accessibility focus and setValue actions", () => {
+    const input = new InputRenderable(renderer, {
+      id: "action-input",
+      value: "initial",
+      width: 20,
+    })
+
+    renderer.root.add(input)
+
+    renderer.handleAccessibilityAction({ type: "focus", nodeId: "action-input" })
+    renderer.handleAccessibilityAction({ type: "setValue", nodeId: "action-input", value: "updated" })
+
+    expect(input.focused).toBe(true)
+    expect(input.value).toBe("updated")
+    expect(getNode("action-input")).toMatchObject({ value: "updated" })
+  })
+
+  test("handles accessibility activate actions for select controls", () => {
+    const select = new SelectRenderable(renderer, {
+      id: "action-select",
+      width: 20,
+      height: 3,
+      options: [
+        { name: "First", description: "First item" },
+        { name: "Second", description: "Second item" },
+      ],
+    })
+    const selected: string[] = []
+    select.on("itemSelected", (_index, option) => selected.push(option.name))
+
+    renderer.root.add(select)
+    select.setSelectedIndex(1)
+    renderer.handleAccessibilityAction({ type: "activate", nodeId: "action-select" })
+
+    expect(selected).toEqual(["Second"])
+  })
 })

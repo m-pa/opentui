@@ -20,6 +20,7 @@
   "dependencies": {
     "@dimforge/rapier2d-simd-compat": "^0.17.3",
     "@opentui/core": "workspace:*",
+    "@opentui/accessibility-server": "workspace:*",
     "@opentui/keymap": "workspace:*",
     "@opentui/qrcode": "workspace:*",
     "@opentui/three": "workspace:*",

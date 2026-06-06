@@ -14,6 +14,7 @@ import type {
   AccessibilityIpcMessage,
   AccessibilityIpcSessionMetadata,
   AccessibilityIpcSnapshotMessage,
+  AccessibilityNode,
   AccessibilitySnapshot,
 } from "@opentui/core"
 import {
@@ -21,10 +22,14 @@ import {
   decodeAccessibilityIpcMessage,
   encodeAccessibilityIpcMessage,
 } from "@opentui/core"
+import { createDefaultSpeechAdapter } from "./adapters/command-speech.js"
+import type { AccessibilityAdapter } from "./adapters/types.js"
 
 export interface AccessibilityIpcServerOptions {
   socketPath: string
   token?: string
+  adapters?: AccessibilityAdapter[]
+  enableDefaultSpeechAdapter?: boolean
 }
 
 export interface AccessibilityIpcSession extends AccessibilityIpcSessionMetadata {
@@ -44,22 +49,46 @@ interface PendingAction {
   timeout: ReturnType<typeof setTimeout>
 }
 
+export type AccessibilityReviewCommand =
+  | "currentFocus"
+  | "screenSummary"
+  | "nextControl"
+  | "previousControl"
+  | "activate"
+
+export interface AccessibilityReviewResult {
+  sessionId: string
+  command: AccessibilityReviewCommand
+  nodeId?: string
+  text: string
+}
+
+const REVIEW_ROLES = new Set(["button", "textbox", "listbox", "tablist", "tab", "link", "status", "alert", "region"])
+
 export class AccessibilityIpcServer extends EventEmitter {
   private server: Server | null = null
   private readonly sessions = new Map<string, AccessibilityIpcSession>()
   private readonly socketsBySession = new Map<string, Socket>()
   private readonly connectionStates = new WeakMap<Socket, ConnectionState>()
   private readonly pendingActions = new Map<string, PendingAction>()
+  private readonly adapters: AccessibilityAdapter[]
+  private readonly reviewIndexes = new Map<string, number>()
   private actionCounter = 0
 
   constructor(private readonly options: AccessibilityIpcServerOptions) {
     super()
+    const defaultAdapter = options.enableDefaultSpeechAdapter === false ? null : createDefaultSpeechAdapter()
+    this.adapters = [...(options.adapters ?? []), ...(defaultAdapter ? [defaultAdapter] : [])]
   }
 
   public async start(): Promise<void> {
     if (this.server) return
 
     await this.prepareSocketPath()
+
+    for (const adapter of this.adapters) {
+      await adapter.start?.()
+    }
 
     this.server = createServer((socket) => this.handleConnection(socket))
     await new Promise<void>((resolve, reject) => {
@@ -100,6 +129,10 @@ export class AccessibilityIpcServer extends EventEmitter {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()))
       })
+    }
+
+    for (const adapter of this.adapters) {
+      await adapter.stop?.()
     }
 
     if (process.platform !== "win32") {
@@ -145,6 +178,64 @@ export class AccessibilityIpcServer extends EventEmitter {
 
     socket.write(encodeAccessibilityIpcMessage(message))
     return resultPromise
+  }
+
+  public getFocusedNode(sessionId: string): AccessibilityNode | null {
+    const snapshot = this.sessions.get(sessionId)?.snapshot
+    if (!snapshot?.focusedId) return null
+    return snapshot.nodes.find((node) => node.id === snapshot.focusedId) ?? null
+  }
+
+  public getReviewNodes(sessionId: string): AccessibilityNode[] {
+    const snapshot = this.sessions.get(sessionId)?.snapshot
+    if (!snapshot) return []
+    return snapshot.nodes.filter((node) => node.id !== snapshot.rootId && REVIEW_ROLES.has(node.role))
+  }
+
+  public getScreenSummary(sessionId: string): string {
+    const snapshot = this.sessions.get(sessionId)?.snapshot
+    if (!snapshot) return "No accessibility session snapshot available."
+    const nodes = snapshot.nodes.filter((node) => node.id !== snapshot.rootId)
+    if (nodes.length === 0) return "No accessibility nodes."
+    return nodes.map((node) => this.describeNode(node)).filter(Boolean).join(". ")
+  }
+
+  public async review(sessionId: string, command: AccessibilityReviewCommand): Promise<AccessibilityReviewResult> {
+    const focusedNode = this.getFocusedNode(sessionId)
+    const reviewNodes = this.getReviewNodes(sessionId)
+    const currentIndex = this.clampReviewIndex(sessionId, reviewNodes, focusedNode?.id)
+
+    switch (command) {
+      case "currentFocus": {
+        const text = focusedNode ? this.describeNode(focusedNode) : "No focused accessibility node."
+        return { sessionId, command, nodeId: focusedNode?.id, text }
+      }
+      case "screenSummary":
+        return { sessionId, command, text: this.getScreenSummary(sessionId) }
+      case "nextControl": {
+        const nextIndex = reviewNodes.length === 0 ? -1 : (currentIndex + 1) % reviewNodes.length
+        this.reviewIndexes.set(sessionId, nextIndex)
+        const node = nextIndex >= 0 ? reviewNodes[nextIndex] : undefined
+        return { sessionId, command, nodeId: node?.id, text: node ? this.describeNode(node) : "No controls." }
+      }
+      case "previousControl": {
+        const nextIndex = reviewNodes.length === 0 ? -1 : (currentIndex - 1 + reviewNodes.length) % reviewNodes.length
+        this.reviewIndexes.set(sessionId, nextIndex)
+        const node = nextIndex >= 0 ? reviewNodes[nextIndex] : undefined
+        return { sessionId, command, nodeId: node?.id, text: node ? this.describeNode(node) : "No controls." }
+      }
+      case "activate": {
+        const node = currentIndex >= 0 ? reviewNodes[currentIndex] : focusedNode
+        if (!node) return { sessionId, command, text: "No control to activate." }
+        const result = await this.sendAction(sessionId, { type: "activate", nodeId: node.id })
+        return {
+          sessionId,
+          command,
+          nodeId: node.id,
+          text: result.ok ? `Activated ${this.describeNode(node)}.` : `Activation failed: ${result.error ?? "unknown error"}.`,
+        }
+      }
+    }
   }
 
   private handleConnection(socket: Socket): void {
@@ -249,6 +340,9 @@ export class AccessibilityIpcServer extends EventEmitter {
     if (!session) return
     session.events.push(message.event)
     this.emit("event", message.sessionId, message.event)
+    for (const adapter of this.adapters) {
+      Promise.resolve(adapter.handleEvent(session, message.event)).catch((error) => this.emit("error", error))
+    }
   }
 
   private handleActionResult(message: AccessibilityIpcActionResultMessage): void {
@@ -265,6 +359,30 @@ export class AccessibilityIpcServer extends EventEmitter {
     await mkdir(dirname(this.options.socketPath), { recursive: true })
     await unlink(this.options.socketPath).catch(() => {})
   }
+
+  private clampReviewIndex(sessionId: string, nodes: AccessibilityNode[], focusedId: string | undefined): number {
+    if (nodes.length === 0) return -1
+    const existing = this.reviewIndexes.get(sessionId)
+    if (existing !== undefined && existing >= 0 && existing < nodes.length) return existing
+    const focusedIndex = focusedId ? nodes.findIndex((node) => node.id === focusedId) : -1
+    const nextIndex = focusedIndex >= 0 ? focusedIndex : 0
+    this.reviewIndexes.set(sessionId, nextIndex)
+    return nextIndex
+  }
+
+  private describeNode(node: AccessibilityNode): string {
+    const parts = [node.label ?? node.value ?? node.id, node.role]
+    if (node.value && node.label && node.value !== node.label) {
+      parts.push(node.value)
+    }
+    if (typeof node.state.selectedIndex === "number" && typeof node.state.optionCount === "number") {
+      parts.push(`${node.state.selectedIndex + 1} of ${node.state.optionCount}`)
+    }
+    return parts.filter(Boolean).join(", ")
+  }
 }
 
 export type { AccessibilityIpcMessage }
+export * from "./adapters/types.js"
+export * from "./adapters/command-speech.js"
+export * from "./adapters/windows-uia-notification.js"

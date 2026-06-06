@@ -22,6 +22,7 @@ const __dirname = dirname(__filename)
 const packageRoot = resolve(__dirname, "..")
 const repoRoot = resolve(packageRoot, "../..")
 const coreRoot = join(repoRoot, "packages", "core")
+const accessibilityServerRoot = join(repoRoot, "packages", "accessibility-server")
 const keymapRoot = join(repoRoot, "packages", "keymap")
 const qrcodeRoot = join(repoRoot, "packages", "qrcode")
 const threeRoot = join(repoRoot, "packages", "three")
@@ -56,6 +57,10 @@ const workspaceAliasPlugin: BunPlugin = {
   setup(build) {
     build.onResolve({ filter: /^@opentui\/core$/ }, () => ({
       path: join(coreRoot, "src", "index.ts"),
+    }))
+
+    build.onResolve({ filter: /^@opentui\/accessibility-server$/ }, () => ({
+      path: join(accessibilityServerRoot, "src", "index.ts"),
     }))
 
     build.onResolve({ filter: /^@opentui\/three$/ }, () => ({

@@ -8,7 +8,7 @@ import {
   type AccessibilityEvent,
   type AccessibilitySnapshot,
 } from "@opentui/core"
-import { AccessibilityIpcServer } from "./index.js"
+import { AccessibilityIpcServer, type AccessibilityAdapter, type AccessibilityIpcSession } from "./index.js"
 
 let server: AccessibilityIpcServer
 let client: AccessibilityIpcClient
@@ -73,7 +73,7 @@ describe("AccessibilityIpcServer", () => {
     const socketPath = createSocketPath(sessionId)
     const snapshot = createSnapshot("Run")
 
-    server = new AccessibilityIpcServer({ socketPath, token })
+    server = new AccessibilityIpcServer({ socketPath, token, enableDefaultSpeechAdapter: false })
     await server.start()
 
     const snapshotPromise = waitFor<[string, AccessibilitySnapshot]>((resolve) => {
@@ -111,7 +111,7 @@ describe("AccessibilityIpcServer", () => {
       politeness: "polite",
     }
 
-    server = new AccessibilityIpcServer({ socketPath })
+    server = new AccessibilityIpcServer({ socketPath, enableDefaultSpeechAdapter: false })
     await server.start()
 
     const eventPromise = waitFor<[string, AccessibilityEvent]>((resolve) => {
@@ -139,7 +139,7 @@ describe("AccessibilityIpcServer", () => {
     const socketPath = createSocketPath(sessionId)
     const actions: unknown[] = []
 
-    server = new AccessibilityIpcServer({ socketPath })
+    server = new AccessibilityIpcServer({ socketPath, enableDefaultSpeechAdapter: false })
     await server.start()
 
     const snapshotPromise = waitFor<void>((resolve) => {
@@ -161,5 +161,78 @@ describe("AccessibilityIpcServer", () => {
 
     expect(result).toMatchObject({ ok: true, sessionId })
     expect(actions).toEqual([{ type: "focus", nodeId: "button" }])
+  })
+
+  test("dispatches accessibility events to adapters", async () => {
+    const sessionId = createAccessibilityIpcSessionId("a11y-test")
+    const socketPath = createSocketPath(sessionId)
+    const handled: Array<[AccessibilityIpcSession, AccessibilityEvent]> = []
+    const adapter: AccessibilityAdapter = {
+      name: "test-adapter",
+      handleEvent: (session, event) => {
+        handled.push([session, event])
+      },
+    }
+    const event: AccessibilityEvent = { type: "live", text: "Ready", politeness: "polite" }
+
+    server = new AccessibilityIpcServer({ socketPath, adapters: [adapter], enableDefaultSpeechAdapter: false })
+    await server.start()
+
+    client = new AccessibilityIpcClient({
+      socketPath,
+      sessionId,
+      getSnapshot: () => createSnapshot("Run"),
+    })
+    await client.connect()
+    client.sendEvent(event)
+
+    await waitFor<void>((resolve) => {
+      server.once("event", () => resolve())
+    })
+
+    expect(handled).toHaveLength(1)
+    expect(handled[0][0]).toMatchObject({ sessionId })
+    expect(handled[0][1]).toEqual(event)
+  })
+
+  test("provides semantic review commands", async () => {
+    const sessionId = createAccessibilityIpcSessionId("a11y-test")
+    const socketPath = createSocketPath(sessionId)
+    const actions: unknown[] = []
+
+    server = new AccessibilityIpcServer({ socketPath, enableDefaultSpeechAdapter: false })
+    await server.start()
+
+    const snapshotPromise = waitFor<void>((resolve) => {
+      server.once("snapshot", () => resolve())
+    })
+
+    client = new AccessibilityIpcClient({
+      socketPath,
+      sessionId,
+      getSnapshot: () => createSnapshot("Run"),
+      handleAction: (action) => {
+        actions.push(action)
+      },
+    })
+    await client.connect()
+    await snapshotPromise
+
+    expect(await server.review(sessionId, "currentFocus")).toMatchObject({
+      nodeId: "button",
+      text: "Run, button",
+    })
+    expect(await server.review(sessionId, "screenSummary")).toMatchObject({
+      text: "Run, button",
+    })
+    expect(await server.review(sessionId, "nextControl")).toMatchObject({
+      nodeId: "button",
+      text: "Run, button",
+    })
+
+    const activation = await server.review(sessionId, "activate")
+    expect(activation).toMatchObject({ nodeId: "button" })
+    expect(activation.text).toContain("Activated")
+    expect(actions).toContainEqual({ type: "activate", nodeId: "button" })
   })
 })

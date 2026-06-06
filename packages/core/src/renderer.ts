@@ -1349,9 +1349,87 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     const client = new AccessibilityIpcClient({
       ...options,
       getSnapshot: () => this.getAccessibilitySnapshot(),
+      handleAction: options.handleAction ?? ((action) => this.handleAccessibilityAction(action)),
     })
     client.bindEvents(this)
     return client
+  }
+
+  public handleAccessibilityAction(action: AccessibilityIpcAction): void {
+    switch (action.type) {
+      case "focus": {
+        const target = this.root.findDescendantById(action.nodeId)
+        if (!target) throw new Error(`Accessibility node not found: ${action.nodeId}`)
+        if (!target.focusable) throw new Error(`Accessibility node is not focusable: ${action.nodeId}`)
+        target.focus()
+        return
+      }
+      case "activate": {
+        const target = this.root.findDescendantById(action.nodeId)
+        if (!target) throw new Error(`Accessibility node not found: ${action.nodeId}`)
+        const actionable = target as unknown as {
+          selectCurrent?: () => void
+          submit?: () => boolean
+          focus?: () => void
+        }
+        if (typeof actionable.selectCurrent === "function") {
+          actionable.selectCurrent()
+          return
+        }
+        if (typeof actionable.submit === "function") {
+          actionable.submit()
+          return
+        }
+        if (target.focusable) {
+          target.focus()
+          return
+        }
+        throw new Error(`Accessibility node is not activatable: ${action.nodeId}`)
+      }
+      case "setValue": {
+        const target = this.root.findDescendantById(action.nodeId)
+        if (!target) throw new Error(`Accessibility node not found: ${action.nodeId}`)
+        const valueTarget = target as unknown as { value?: string; content?: string; setText?: (value: string) => void }
+        if ("value" in valueTarget) {
+          valueTarget.value = action.value
+          return
+        }
+        if (typeof valueTarget.setText === "function") {
+          valueTarget.setText(action.value)
+          return
+        }
+        if ("content" in valueTarget) {
+          valueTarget.content = action.value
+          return
+        }
+        throw new Error(`Accessibility node value is not settable: ${action.nodeId}`)
+      }
+      case "scroll": {
+        const target = this.root.findDescendantById(action.nodeId)
+        if (!target) throw new Error(`Accessibility node not found: ${action.nodeId}`)
+        const scrollTarget = target as unknown as { scrollTop?: number; scrollLeft?: number }
+        const amount = action.amount ?? 1
+        if (action.direction === "up" && typeof scrollTarget.scrollTop === "number") {
+          scrollTarget.scrollTop -= amount
+          return
+        }
+        if (action.direction === "down" && typeof scrollTarget.scrollTop === "number") {
+          scrollTarget.scrollTop += amount
+          return
+        }
+        if (action.direction === "left" && typeof scrollTarget.scrollLeft === "number") {
+          scrollTarget.scrollLeft -= amount
+          return
+        }
+        if (action.direction === "right" && typeof scrollTarget.scrollLeft === "number") {
+          scrollTarget.scrollLeft += amount
+          return
+        }
+        throw new Error(`Accessibility node is not scrollable: ${action.nodeId}`)
+      }
+      case "snapshot":
+        return
+    }
   }
 
   private normalizeClockTime(now: number, fallback: number): number {

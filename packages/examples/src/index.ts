@@ -79,6 +79,7 @@ import { setupCommonDemoKeys } from "./lib/standalone-keys.js"
 import * as corePluginSlotsDemo from "./core-plugin-slots-demo.js"
 import * as wideGraphemeOverlayDemo from "./wide-grapheme-overlay-demo.js"
 import * as nativeAudioDemo from "./native-audio-demo.js"
+import * as accessibilityDemo from "./accessibility-demo.js"
 
 interface Example {
   name: string
@@ -189,6 +190,12 @@ const examples: Example[] = [
     description: "Standalone OSC terminal notification demo with capability detection and interactive triggers",
     run: notificationDemo.run,
     destroy: notificationDemo.destroy,
+  },
+  {
+    name: "Accessibility Demo",
+    description: "Semantic accessibility snapshot, event stream, IPC server, and review/action commands",
+    run: accessibilityDemo.run,
+    destroy: accessibilityDemo.destroy,
   },
   {
     name: "Styled Text Demo",
