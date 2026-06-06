@@ -309,6 +309,7 @@ export class ScrollBoxRenderable extends BoxRenderable {
       ...(sanitizedRootBoxOptions as BoxOptions),
       ...(sanitizedRootOptions as BoxOptions),
     })
+    this._accessibilityRole ??= "region"
 
     this.internalId = ScrollBoxRenderable.idCounter++
     this._stickyScroll = stickyScroll

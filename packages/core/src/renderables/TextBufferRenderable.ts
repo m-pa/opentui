@@ -58,6 +58,7 @@ export abstract class TextBufferRenderable extends Renderable implements LineInf
 
   constructor(ctx: RenderContext, options: TextBufferOptions) {
     super(ctx, options)
+    this._accessibilityRole ??= "text"
 
     this._defaultFg = parseColor(options.fg ?? this._defaultOptions.fg)
     this._defaultBg = parseColor(options.bg ?? this._defaultOptions.bg)
@@ -198,6 +199,10 @@ export abstract class TextBufferRenderable extends Renderable implements LineInf
 
   get plainText(): string {
     return this.textBuffer.getPlainText()
+  }
+
+  public override get accessibilityValue(): string | undefined {
+    return this._accessibilityValue ?? this.plainText
   }
 
   get textLength(): number {

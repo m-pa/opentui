@@ -25,6 +25,7 @@ export class TextRenderable extends TextBufferRenderable {
 
   constructor(ctx: RenderContext, options: TextOptions) {
     super(ctx, options)
+    this._accessibilityRole ??= "text"
 
     const content = options.content ?? this._contentDefaultOptions.content
     const styledText = typeof content === "string" ? stringToStyledText(content) : content
@@ -68,6 +69,10 @@ export class TextRenderable extends TextBufferRenderable {
     return this._text.chunks
   }
 
+  public override get accessibilityValue(): string | undefined {
+    return this._accessibilityValue ?? this._text.chunks.map((chunk) => chunk.text).join("")
+  }
+
   get textNode(): RootTextNodeRenderable {
     return this.rootTextNode
   }
@@ -79,6 +84,7 @@ export class TextRenderable extends TextBufferRenderable {
       this._text = styledText
       this.updateTextBuffer(styledText)
       this.updateTextInfo()
+      this.ctx.notifyAccessibilityValueChanged(this)
     }
   }
 

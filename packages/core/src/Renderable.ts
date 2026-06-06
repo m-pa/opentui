@@ -22,6 +22,12 @@ import {
 import { maybeMakeRenderable, type VNode } from "./renderables/composition/vnode.js"
 import type { MouseEvent } from "./renderer.js"
 import type { RenderContext } from "./types.js"
+import type {
+  AccessibilityLive,
+  AccessibilityOptions,
+  AccessibilityRole,
+  AccessibilityState,
+} from "./accessibility/types.js"
 import {
   validateOptions,
   isPositionType,
@@ -96,7 +102,9 @@ export interface LayoutOptions extends BaseRenderableOptions {
   enableLayout?: boolean
 }
 
-export interface RenderableOptions<T extends BaseRenderable = BaseRenderable> extends Partial<LayoutOptions> {
+export interface RenderableOptions<T extends BaseRenderable = BaseRenderable>
+  extends Partial<LayoutOptions>,
+    AccessibilityOptions {
   width?: number | "auto" | `${number}%`
   height?: number | "auto" | `${number}%`
   zIndex?: number
@@ -228,6 +236,13 @@ export abstract class Renderable extends BaseRenderable {
   protected _focusable: boolean = false
   protected _focused: boolean = false
   protected _hasFocusedDescendant: boolean = false
+  protected _accessibilityRole?: AccessibilityRole
+  protected _accessibilityLabel?: string
+  protected _accessibilityDescription?: string
+  protected _accessibilityValue?: string
+  protected _accessibilityHidden: boolean = false
+  protected _accessibilityLive?: AccessibilityLive
+  protected _accessibilityState: AccessibilityState = {}
   protected keypressHandler: ((key: KeyEvent) => void) | null = null
   protected pasteHandler: ((event: PasteEvent) => void) | null = null
 
@@ -292,6 +307,13 @@ export abstract class Renderable extends BaseRenderable {
     this._live = options.live ?? false
     this._liveCount = this._live && this._visible ? 1 : 0
     this._opacity = options.opacity !== undefined ? Math.max(0, Math.min(1, options.opacity)) : 1.0
+    this._accessibilityRole = options.accessibilityRole
+    this._accessibilityLabel = options.accessibilityLabel
+    this._accessibilityDescription = options.accessibilityDescription
+    this._accessibilityValue = options.accessibilityValue
+    this._accessibilityHidden = options.accessibilityHidden ?? false
+    this._accessibilityLive = options.accessibilityLive
+    this._accessibilityState = { ...(options.accessibilityState ?? {}) }
 
     // TODO: use a global yoga config
     this.yogaNode = Yoga.Node.create(yogaConfig)
@@ -323,6 +345,64 @@ export abstract class Renderable extends BaseRenderable {
 
   public set focusable(value: boolean) {
     this._focusable = value
+  }
+
+  public get accessibilityRole(): AccessibilityRole | undefined {
+    return this._accessibilityRole
+  }
+
+  public set accessibilityRole(value: AccessibilityRole | undefined) {
+    this._accessibilityRole = value
+  }
+
+  public get accessibilityLabel(): string | undefined {
+    return this._accessibilityLabel
+  }
+
+  public set accessibilityLabel(value: string | undefined) {
+    this._accessibilityLabel = value
+  }
+
+  public get accessibilityDescription(): string | undefined {
+    return this._accessibilityDescription
+  }
+
+  public set accessibilityDescription(value: string | undefined) {
+    this._accessibilityDescription = value
+  }
+
+  public get accessibilityValue(): string | undefined {
+    return this._accessibilityValue
+  }
+
+  public set accessibilityValue(value: string | undefined) {
+    if (this._accessibilityValue === value) return
+    this._accessibilityValue = value
+    this._ctx.notifyAccessibilityValueChanged(this)
+  }
+
+  public get accessibilityHidden(): boolean {
+    return this._accessibilityHidden
+  }
+
+  public set accessibilityHidden(value: boolean | undefined) {
+    this._accessibilityHidden = value ?? false
+  }
+
+  public get accessibilityLive(): AccessibilityLive | undefined {
+    return this._accessibilityLive
+  }
+
+  public set accessibilityLive(value: AccessibilityLive | undefined) {
+    this._accessibilityLive = value
+  }
+
+  public get accessibilityState(): AccessibilityState {
+    return this._accessibilityState
+  }
+
+  public set accessibilityState(value: AccessibilityState | undefined) {
+    this._accessibilityState = { ...(value ?? {}) }
   }
 
   public get ctx(): RenderContext {

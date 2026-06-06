@@ -4,6 +4,7 @@ import type { Selection } from "./lib/selection.js"
 import type { Renderable } from "./Renderable.js"
 import type { InternalKeyHandler, KeyHandler } from "./lib/KeyHandler.js"
 import type { EditBufferRenderable } from "./renderables/EditBufferRenderable.js"
+import type { AccessibilityAnnounceOptions, AccessibilityEvent } from "./accessibility/types.js"
 
 export const TextAttributes = {
   NONE: 0,
@@ -97,6 +98,7 @@ export interface RendererEvents {
   focused_editor: (current: EditBufferRenderable | null, previous: EditBufferRenderable | null) => void
   "debugOverlay:toggle": (enabled: boolean) => void
   theme_mode: (mode: ThemeMode) => void
+  accessibility: (event: AccessibilityEvent) => void
 }
 
 export interface RenderContext extends EventEmitter {
@@ -117,6 +119,8 @@ export interface RenderContext extends EventEmitter {
   capabilities: TerminalCapabilities | null
   requestLive: () => void
   dropLive: () => void
+  announce: (text: string, options?: AccessibilityAnnounceOptions) => void
+  notifyAccessibilityValueChanged: (renderable: Renderable) => void
   hasSelection: boolean
   getSelection: () => Selection | null
   requestSelectionUpdate: () => void

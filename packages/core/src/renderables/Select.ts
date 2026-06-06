@@ -4,6 +4,7 @@ import type { KeyEvent } from "../lib/KeyHandler.js"
 import { RGBA, parseColor, type ColorInput } from "../lib/RGBA.js"
 import { Renderable, type RenderableOptions } from "../Renderable.js"
 import type { RenderContext } from "../types.js"
+import type { AccessibilityState } from "../accessibility/types.js"
 import {
   type KeyBinding as BaseKeyBinding,
   mergeKeyBindings,
@@ -109,6 +110,7 @@ export class SelectRenderable extends Renderable {
 
   constructor(ctx: RenderContext, options: SelectRenderableOptions) {
     super(ctx, { ...options, buffered: true })
+    this._accessibilityRole ??= "listbox"
     this._options = options.options || []
     const requestedIndex = options.selectedIndex ?? this._defaultOptions.selectedIndex
     this._selectedIndex = this._options.length > 0 ? Math.min(requestedIndex, this._options.length - 1) : 0
@@ -248,6 +250,7 @@ export class SelectRenderable extends Renderable {
     this._options = options
     this._selectedIndex = Math.min(this._selectedIndex, Math.max(0, options.length - 1))
     this.updateScrollOffset()
+    this.ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
   }
 
@@ -257,6 +260,18 @@ export class SelectRenderable extends Renderable {
 
   public getSelectedIndex(): number {
     return this._selectedIndex
+  }
+
+  public override get accessibilityValue(): string | undefined {
+    return this._accessibilityValue ?? this.getSelectedOption()?.name
+  }
+
+  public override get accessibilityState(): AccessibilityState {
+    return {
+      ...this._accessibilityState,
+      selectedIndex: this._selectedIndex,
+      optionCount: this._options.length,
+    }
   }
 
   public moveUp(steps: number = 1): void {
@@ -273,6 +288,7 @@ export class SelectRenderable extends Renderable {
     this.updateScrollOffset()
     this.requestRender()
     this.emit(SelectRenderableEvents.SELECTION_CHANGED, this._selectedIndex, this.getSelectedOption())
+    this.ctx.notifyAccessibilityValueChanged(this)
   }
 
   public moveDown(steps: number = 1): void {
@@ -289,6 +305,7 @@ export class SelectRenderable extends Renderable {
     this.updateScrollOffset()
     this.requestRender()
     this.emit(SelectRenderableEvents.SELECTION_CHANGED, this._selectedIndex, this.getSelectedOption())
+    this.ctx.notifyAccessibilityValueChanged(this)
   }
 
   public selectCurrent(): void {
@@ -304,6 +321,7 @@ export class SelectRenderable extends Renderable {
       this.updateScrollOffset()
       this.requestRender()
       this.emit(SelectRenderableEvents.SELECTION_CHANGED, this._selectedIndex, this.getSelectedOption())
+      this.ctx.notifyAccessibilityValueChanged(this)
     }
   }
 
@@ -510,6 +528,7 @@ export class SelectRenderable extends Renderable {
     if (this._selectedIndex !== clampedIndex) {
       this._selectedIndex = clampedIndex
       this.updateScrollOffset()
+      this.ctx.notifyAccessibilityValueChanged(this)
       this.requestRender()
     }
   }

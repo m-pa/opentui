@@ -295,6 +295,7 @@ export class MarkdownRenderable extends Renderable {
       flexDirection: "column",
       flexShrink: options.flexShrink ?? 0,
     })
+    this._accessibilityRole ??= "region"
 
     this._syntaxStyle = options.syntaxStyle
     this._fg = options.fg ? parseColor(options.fg) : undefined
@@ -315,11 +316,16 @@ export class MarkdownRenderable extends Renderable {
     return this._content
   }
 
+  public override get accessibilityValue(): string | undefined {
+    return this._accessibilityValue ?? this._content
+  }
+
   set content(value: string) {
     if (this.isDestroyed) return
     if (this._content !== value) {
       this._content = value
       this.updateBlocks()
+      this.ctx.notifyAccessibilityValueChanged(this)
       this.requestRender()
     }
   }

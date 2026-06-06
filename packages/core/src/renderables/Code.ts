@@ -106,6 +106,7 @@ export class CodeRenderable extends TextBufferRenderable {
       this._highlightSnapshotId++
 
       if (this._streaming && !this._drawUnstyledText && this._filetype) {
+        this.ctx.notifyAccessibilityValueChanged(this)
         this.requestRender()
         return
       }
@@ -113,6 +114,7 @@ export class CodeRenderable extends TextBufferRenderable {
       this.textBuffer.setText(value)
       this.setRenderedLineSources(undefined)
       this.updateTextInfo()
+      this.ctx.notifyAccessibilityValueChanged(this)
     }
   }
 

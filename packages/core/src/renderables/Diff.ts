@@ -112,6 +112,7 @@ export class DiffRenderable extends Renderable {
       ...options,
       flexDirection: options.view === "split" ? "row" : "column",
     })
+    this._accessibilityRole ??= "region"
 
     this._diff = options.diff ?? ""
     this._syncScroll = options.syncScroll ?? false
@@ -925,12 +926,17 @@ export class DiffRenderable extends Renderable {
     return this._diff
   }
 
+  public override get accessibilityValue(): string | undefined {
+    return this._accessibilityValue ?? this._diff
+  }
+
   public set diff(value: string) {
     if (this._diff !== value) {
       this._diff = value
       this._waitingForHighlight = false
       this.parseDiff()
       this.rebuildView()
+      this.ctx.notifyAccessibilityValueChanged(this)
     }
   }
 

@@ -48,6 +48,17 @@ import { type Clock, type TimerHandle, SystemClock } from "./lib/clock.js"
 import { StdinParser, type StdinEvent, type StdinParserProtocolContext } from "./lib/stdin-parser.js"
 import { matchesKeyBinding } from "./lib/keybinding.internal.js"
 import { RendererThemeMode } from "./renderer-theme-mode.js"
+import {
+  AccessibilityManager,
+  AccessibilityIpcClient,
+  buildAccessibilitySnapshot,
+  type AccessibilityAnnounceOptions,
+  type AccessibilityEvent,
+  type AccessibilityIpcAction,
+  type AccessibilityIpcClientOptions,
+  type AccessibilityNode,
+  type AccessibilitySnapshot,
+} from "./accessibility/index.js"
 
 registerEnvVar({
   name: "OTUI_DUMP_CAPTURES",
@@ -457,6 +468,8 @@ class ScrollbackSnapshotRenderContext extends EventEmitter implements RenderCont
   public setMousePointer(_shape: MousePointerStyle): void {}
   public requestLive(): void {}
   public dropLive(): void {}
+  public announce(_text: string, _options?: AccessibilityAnnounceOptions): void {}
+  public notifyAccessibilityValueChanged(_renderable: Renderable): void {}
   public getSelection(): Selection | null {
     return null
   }
@@ -697,6 +710,7 @@ export enum CliRenderEvents {
   PALETTE = "palette",
   CAPABILITIES = "capabilities",
   SELECTION = "selection",
+  ACCESSIBILITY = "accessibility",
   DEBUG_OVERLAY_TOGGLE = "debugOverlay:toggle",
   DESTROY = "destroy",
   MEMORY_SNAPSHOT = "memory:snapshot",
@@ -743,6 +757,7 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     arrayBuffers: 0,
   }
   public readonly root: RootRenderable
+  private readonly accessibilityManager: AccessibilityManager
   public width: number
   public height: number
   private _useThread: boolean = false
@@ -1145,6 +1160,12 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     this.prependedInputHandlers = config.prependInputHandlers || []
 
     this.root = new RootRenderable(this)
+    this.accessibilityManager = new AccessibilityManager({
+      getSnapshot: () => buildAccessibilitySnapshot(this.root, this._currentFocusedRenderable),
+    })
+    this.accessibilityManager.on("event", (event: AccessibilityEvent) => {
+      this.emit(CliRenderEvents.ACCESSIBILITY, event)
+    })
 
     if (this.memorySnapshotInterval > 0) {
       this.startMemorySnapshotTimer()
@@ -1296,6 +1317,43 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     return this._currentFocusedRenderable
   }
 
+  public getAccessibilitySnapshot(): AccessibilitySnapshot {
+    return this.accessibilityManager.getSnapshot()
+  }
+
+  public getFocusedAccessibilityNode(): AccessibilityNode | null {
+    return this.accessibilityManager.getFocusedNode()
+  }
+
+  public getAccessibilityEvents(): AccessibilityEvent[] {
+    return this.accessibilityManager.getEvents()
+  }
+
+  public clearAccessibilityEvents(): void {
+    this.accessibilityManager.clearEvents()
+  }
+
+  public announce(text: string, options: AccessibilityAnnounceOptions = {}): void {
+    this.accessibilityManager.announce(text, options)
+  }
+
+  public notifyAccessibilityValueChanged(renderable: Renderable): void {
+    this.accessibilityManager.notifyValueChanged(renderable)
+  }
+
+  public createAccessibilityIpcClient(
+    options: Omit<AccessibilityIpcClientOptions, "getSnapshot" | "handleAction"> & {
+      handleAction?: (action: AccessibilityIpcAction) => void | Promise<void>
+    },
+  ): AccessibilityIpcClient {
+    const client = new AccessibilityIpcClient({
+      ...options,
+      getSnapshot: () => this.getAccessibilitySnapshot(),
+    })
+    client.bindEvents(this)
+    return client
+  }
+
   private normalizeClockTime(now: number, fallback: number): number {
     if (Number.isFinite(now)) {
       return now
@@ -1329,6 +1387,7 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     }
 
     this.emit(CliRenderEvents.FOCUSED_RENDERABLE, renderable, previousRenderable)
+    this.accessibilityManager.notifyFocusChanged(renderable, previousRenderable)
   }
 
   public blurRenderable(renderable: Renderable): void {
@@ -1344,6 +1403,7 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     }
 
     this.emit(CliRenderEvents.FOCUSED_RENDERABLE, null, renderable)
+    this.accessibilityManager.notifyFocusChanged(null, renderable)
   }
 
   private setCapturedRenderable(renderable: Renderable | undefined): void {

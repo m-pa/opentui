@@ -3,6 +3,7 @@ import { OptimizedBuffer } from "../buffer.js"
 import { RGBA, parseColor, type ColorInput } from "../lib/RGBA.js"
 import type { KeyEvent } from "../lib/KeyHandler.js"
 import type { RenderContext } from "../types.js"
+import type { AccessibilityState } from "../accessibility/types.js"
 import {
   type KeyBinding as BaseKeyBinding,
   mergeKeyBindings,
@@ -99,6 +100,7 @@ export class TabSelectRenderable extends Renderable {
     const calculatedHeight = calculateDynamicHeight(options.showUnderline ?? true, options.showDescription ?? true)
 
     super(ctx, { ...options, height: calculatedHeight, buffered: true })
+    this._accessibilityRole ??= "tablist"
 
     this._backgroundColor = parseColor(options.backgroundColor || "transparent")
     this._textColor = parseColor(options.textColor || "#FFFFFF")
@@ -220,6 +222,7 @@ export class TabSelectRenderable extends Renderable {
     this._options = options
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, options.length - 1))
     this.updateScrollOffset()
+    this.ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
   }
 
@@ -229,6 +232,18 @@ export class TabSelectRenderable extends Renderable {
 
   public getSelectedIndex(): number {
     return this.selectedIndex
+  }
+
+  public override get accessibilityValue(): string | undefined {
+    return this._accessibilityValue ?? this.getSelectedOption()?.name
+  }
+
+  public override get accessibilityState(): AccessibilityState {
+    return {
+      ...this._accessibilityState,
+      selectedIndex: this.selectedIndex,
+      optionCount: this._options.length,
+    }
   }
 
   public moveLeft(): void {
@@ -243,6 +258,7 @@ export class TabSelectRenderable extends Renderable {
     this.updateScrollOffset()
     this.requestRender()
     this.emit(TabSelectRenderableEvents.SELECTION_CHANGED, this.selectedIndex, this.getSelectedOption())
+    this.ctx.notifyAccessibilityValueChanged(this)
   }
 
   public moveRight(): void {
@@ -257,6 +273,7 @@ export class TabSelectRenderable extends Renderable {
     this.updateScrollOffset()
     this.requestRender()
     this.emit(TabSelectRenderableEvents.SELECTION_CHANGED, this.selectedIndex, this.getSelectedOption())
+    this.ctx.notifyAccessibilityValueChanged(this)
   }
 
   public selectCurrent(): void {
@@ -272,6 +289,7 @@ export class TabSelectRenderable extends Renderable {
       this.updateScrollOffset()
       this.requestRender()
       this.emit(TabSelectRenderableEvents.SELECTION_CHANGED, this.selectedIndex, this.getSelectedOption())
+      this.ctx.notifyAccessibilityValueChanged(this)
     }
   }
 
@@ -336,6 +354,7 @@ export class TabSelectRenderable extends Renderable {
     this._options = options
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, options.length - 1))
     this.updateScrollOffset()
+    this.ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
   }
 

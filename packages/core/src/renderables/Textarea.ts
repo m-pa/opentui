@@ -13,6 +13,7 @@ import {
 } from "../lib/keybinding.internal.js"
 import { type StyledText, fg } from "../lib/styled-text.js"
 import type { ExtmarksController } from "../lib/extmarks.js"
+import type { AccessibilityState } from "../accessibility/types.js"
 
 export type TextareaAction =
   | "move-left"
@@ -175,6 +176,8 @@ export class TextareaRenderable extends EditBufferRenderable {
       textColor: options.textColor || defaults.textColor,
     }
     super(ctx, baseOptions)
+    this._accessibilityRole ??= "textbox"
+    this._accessibilityState = { multiline: true, ...this._accessibilityState }
 
     // Store unfocused colors separately (parent's properties get overwritten when focused)
     this._unfocusedBackgroundColor = parseColor(options.backgroundColor || defaults.backgroundColor)
@@ -200,6 +203,17 @@ export class TextareaRenderable extends EditBufferRenderable {
     this.updateColors()
 
     this.applyPlaceholder(this._placeholder)
+  }
+
+  public override get accessibilityValue(): string | undefined {
+    return this._accessibilityValue ?? this.plainText
+  }
+
+  public override get accessibilityState(): AccessibilityState {
+    return {
+      multiline: true,
+      ...this._accessibilityState,
+    }
   }
 
   private applyPlaceholder(placeholder: StyledText | string | null): void {

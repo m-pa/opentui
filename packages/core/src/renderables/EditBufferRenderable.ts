@@ -183,6 +183,7 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
     this.editBuffer.on("content-changed", () => {
       this.yogaNode.markDirty()
       this.requestRender()
+      this.ctx.notifyAccessibilityValueChanged(this)
       this.emit("line-info-change")
       if (this._contentChangeListener) {
         this._contentChangeListener({})
@@ -594,6 +595,7 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
   private deleteSelectedText(): void {
     this.editorView.deleteSelectedText()
     this._ctx.clearSelection()
+    this._ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
   }
 
@@ -640,6 +642,7 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
     }
 
     this.editBuffer.insertChar(char)
+    this._ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
   }
 
@@ -649,6 +652,7 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
     }
 
     this.editBuffer.insertText(text)
+    this._ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
   }
 
@@ -660,6 +664,7 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
 
     this._ctx.clearSelection()
     this.editBuffer.deleteChar()
+    this._ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
     return true
   }
@@ -672,6 +677,7 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
 
     this._ctx.clearSelection()
     this.editBuffer.deleteCharBackward()
+    this._ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
     return true
   }
@@ -679,6 +685,7 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
   public newLine(): boolean {
     this._ctx.clearSelection()
     this.editBuffer.newLine()
+    this._ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
     return true
   }
@@ -686,6 +693,7 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
   public deleteLine(): boolean {
     this._ctx.clearSelection()
     this.editBuffer.deleteLine()
+    this._ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
     return true
   }
@@ -845,6 +853,7 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
       this.editBuffer.deleteRange(cursor.row, cursor.col, eol.row, eol.col)
     }
 
+    this._ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
     return true
   }
@@ -858,6 +867,7 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
       this.editBuffer.deleteCharBackward()
     }
 
+    this._ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
     return true
   }
@@ -865,6 +875,7 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
   public undo(): boolean {
     this._ctx.clearSelection()
     this.editBuffer.undo()
+    this._ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
     return true
   }
@@ -872,6 +883,7 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
   public redo(): boolean {
     this._ctx.clearSelection()
     this.editBuffer.redo()
+    this._ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
     return true
   }
@@ -910,6 +922,7 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
     }
 
     this._ctx.clearSelection()
+    this._ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
     return true
   }
@@ -928,6 +941,7 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
     }
 
     this._ctx.clearSelection()
+    this._ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
     return true
   }
@@ -1113,6 +1127,7 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
   public setText(text: string): void {
     this.editBuffer.setText(text)
     this.yogaNode.markDirty()
+    this._ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
   }
 
@@ -1123,6 +1138,7 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
   public replaceText(text: string): void {
     this.editBuffer.replaceText(text)
     this.yogaNode.markDirty()
+    this._ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
   }
 
@@ -1130,12 +1146,14 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
     this.editBuffer.clear()
     this.editBuffer.clearAllHighlights()
     this.yogaNode.markDirty()
+    this._ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
   }
 
   public deleteRange(startLine: number, startCol: number, endLine: number, endCol: number): void {
     this.editBuffer.deleteRange(startLine, startCol, endLine, endCol)
     this.yogaNode.markDirty()
+    this._ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
   }
 

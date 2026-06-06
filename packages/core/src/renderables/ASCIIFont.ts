@@ -62,6 +62,7 @@ export class ASCIIFontRenderable extends FrameBufferRenderable {
       height: measurements.height || 1,
       respectAlpha: true,
     } as FrameBufferOptions)
+    this._accessibilityRole ??= "text"
 
     this._text = text
     this._font = font
@@ -83,6 +84,10 @@ export class ASCIIFontRenderable extends FrameBufferRenderable {
     return this._text
   }
 
+  public override get accessibilityValue(): string | undefined {
+    return this._accessibilityValue ?? this._text
+  }
+
   set text(value: string) {
     this._text = value
     this.updateDimensions()
@@ -92,6 +97,7 @@ export class ASCIIFontRenderable extends FrameBufferRenderable {
     }
 
     this.renderFontToBuffer()
+    this.ctx.notifyAccessibilityValueChanged(this)
     this.requestRender()
   }
 

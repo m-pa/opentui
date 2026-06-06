@@ -1,6 +1,7 @@
 import type { PasteEvent } from "../lib/KeyHandler.js"
 import { decodePasteBytes, stripAnsiSequences } from "../lib/paste.js"
 import type { RenderContext } from "../types.js"
+import type { AccessibilityState } from "../accessibility/types.js"
 import {
   TextareaRenderable,
   type TextareaOptions,
@@ -89,6 +90,7 @@ export class InputRenderable extends TextareaRenderable {
     this._maxLength = maxLength
     this._minLength = minLength
     this._lastCommittedValue = this.plainText
+    this._accessibilityState = { ...this._accessibilityState, multiline: false }
 
     // Set cursor to end of initial value
     if (initialValue) {
@@ -265,6 +267,13 @@ export class InputRenderable extends TextareaRenderable {
   public override get placeholder(): string {
     const p = super.placeholder
     return typeof p === "string" ? p : ""
+  }
+
+  public override get accessibilityState(): AccessibilityState {
+    return {
+      ...this._accessibilityState,
+      multiline: false,
+    }
   }
 
   public override set initialValue(value: string) {
