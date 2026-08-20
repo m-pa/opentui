@@ -672,6 +672,64 @@ test("hit grid stays clipped after render", async () => {
   expect(outsideHitId).toBe(0)
 })
 
+test("bordered overflow clip includes the final content row in the hit grid", async () => {
+  const container = new BoxRenderable(testRenderer, {
+    id: "bordered-row-container",
+    position: "absolute",
+    left: 5,
+    top: 4,
+    width: 8,
+    height: 6,
+    border: true,
+    overflow: "hidden",
+  })
+  testRenderer.root.add(container)
+
+  const child = new BoxRenderable(testRenderer, {
+    id: "bordered-row-child",
+    width: 6,
+    height: 4,
+  })
+  container.add(child)
+
+  await testRenderer.idle()
+
+  expect(child.x).toBe(container.x + 1)
+  expect(child.y).toBe(container.y + 1)
+  expect(child.height).toBe(container.height - 2)
+  expect(testRenderer.hitTest(child.x, child.y)).toBe(child.num)
+  expect(testRenderer.hitTest(child.x, child.y + child.height - 1)).toBe(child.num)
+})
+
+test("bordered overflow clip includes the final content column in the hit grid", async () => {
+  const container = new BoxRenderable(testRenderer, {
+    id: "bordered-column-container",
+    position: "absolute",
+    left: 5,
+    top: 4,
+    width: 8,
+    height: 6,
+    border: true,
+    overflow: "hidden",
+  })
+  testRenderer.root.add(container)
+
+  const child = new BoxRenderable(testRenderer, {
+    id: "bordered-column-child",
+    width: 6,
+    height: 4,
+  })
+  container.add(child)
+
+  await testRenderer.idle()
+
+  expect(child.x).toBe(container.x + 1)
+  expect(child.y).toBe(container.y + 1)
+  expect(child.width).toBe(container.width - 2)
+  expect(testRenderer.hitTest(child.x, child.y)).toBe(child.num)
+  expect(testRenderer.hitTest(child.x + child.width - 1, child.y)).toBe(child.num)
+})
+
 test("buffered overflow scissor uses screen coordinates for hit grid", async () => {
   const container = new BoxRenderable(testRenderer, {
     id: "buffered-container",
