@@ -95,8 +95,10 @@ type ParserState =
   | { tag: "dcs"; sawEsc: boolean }
   | { tag: "apc"; sawEsc: boolean }
   | { tag: "esc_recovery" }
-  | { tag: "esc_less_mouse" }
-  | { tag: "esc_less_x10_mouse" }
+  | { tag: "esc_less_mouse"; missingPrefix: MouseRecoveryPrefix }
+  | { tag: "esc_less_x10_mouse"; missingPrefix: MouseRecoveryPrefix }
+
+type MouseRecoveryPrefix = "esc" | "csi"
 
 // Collects paste body incrementally, bypassing the main ByteQueue so large
 // pastes don't grow the parser buffer. Keeps only a small tail for end-marker
@@ -508,10 +510,12 @@ function concatBytes(left: Uint8Array, right: Uint8Array): Uint8Array {
   return combined
 }
 
-function withEscPrefix(bytes: Uint8Array): Uint8Array {
-  const prefixed = new Uint8Array(bytes.length + 1)
+function restoreMousePrefix(bytes: Uint8Array, missingPrefix: MouseRecoveryPrefix): Uint8Array {
+  const prefixLength = missingPrefix === "esc" ? 1 : 2
+  const prefixed = new Uint8Array(bytes.length + prefixLength)
   prefixed[0] = ESC
-  prefixed.set(bytes, 1)
+  if (missingPrefix === "csi") prefixed[1] = 0x5b
+  prefixed.set(bytes, prefixLength)
   return prefixed
 }
 
@@ -605,9 +609,9 @@ export class StdinParser {
   // final and emits it as one atomic event (e.g. a lone ESC becomes an
   // Escape key). Set by the timeout, consumed by the next read() or drain().
   private forceFlush = false
-  // True only immediately after a timeout flush emits a lone ESC key. The next
-  // `[` may begin a delayed `[<...M/m` mouse continuation recovery path.
-  private justFlushedEsc = false
+  // Records an exact mouse framing prefix emitted by a timeout flush. The next
+  // bytes may complete a delayed SGR or X10 report without leaking into keys.
+  private flushedMousePrefix: MouseRecoveryPrefix | null = null
   private state: ParserState = { tag: "ground" }
   // Scan position within pending.view() during scanPending().
   private cursor = 0
@@ -920,18 +924,29 @@ export class StdinParser {
         case "ground": {
           this.unitStart = this.cursor
 
-          // After a timeout-flushed lone ESC, a following `[` may be the start
-          // of a delayed `[<...M/m` mouse continuation. Recover only this narrow
-          // case; otherwise clear the recovery flag and parse bytes normally.
-          if (this.justFlushedEsc) {
-            if (byte === 0x5b) {
-              this.justFlushedEsc = false
+          // Recover only mouse continuations after an exact timeout-flushed ESC
+          // or CSI introducer. Any unrelated byte clears the one-shot marker.
+          if (this.flushedMousePrefix) {
+            const missingPrefix = this.flushedMousePrefix
+            this.flushedMousePrefix = null
+
+            if (missingPrefix === "esc" && byte === 0x5b) {
               this.cursor += 1
               this.state = { tag: "esc_recovery" }
               continue
             }
 
-            this.justFlushedEsc = false
+            if (missingPrefix === "csi" && byte === 0x3c) {
+              this.cursor += 1
+              this.state = { tag: "esc_less_mouse", missingPrefix }
+              continue
+            }
+
+            if (missingPrefix === "csi" && byte === 0x4d) {
+              this.cursor += 1
+              this.state = { tag: "esc_less_x10_mouse", missingPrefix }
+              continue
+            }
           }
 
           if (byte === ESC) {
@@ -1011,7 +1026,7 @@ export class StdinParser {
 
             const flushedLoneEsc = this.cursor === this.unitStart + 1 && bytes[this.unitStart] === ESC
             this.emitKeyOrResponse("unknown", decodeUtf8(bytes.subarray(this.unitStart, this.cursor)))
-            this.justFlushedEsc = flushedLoneEsc
+            this.flushedMousePrefix = flushedLoneEsc ? "esc" : null
             this.state = { tag: "ground" }
             this.consumePrefix(this.cursor)
             continue
@@ -1099,13 +1114,13 @@ export class StdinParser {
 
           if (byte === 0x3c) {
             this.cursor += 1
-            this.state = { tag: "esc_less_mouse" }
+            this.state = { tag: "esc_less_mouse", missingPrefix: "esc" }
             continue
           }
 
           if (byte === 0x4d) {
             this.cursor += 1
-            this.state = { tag: "esc_less_x10_mouse" }
+            this.state = { tag: "esc_less_x10_mouse", missingPrefix: "esc" }
             continue
           }
 
@@ -1122,7 +1137,9 @@ export class StdinParser {
               return
             }
 
+            const flushedCsiIntroducer = this.cursor === this.unitStart + 2 && bytes[this.unitStart] === ESC
             this.emitOpaqueResponse("unknown", bytes.subarray(this.unitStart, this.cursor))
+            this.flushedMousePrefix = flushedCsiIntroducer ? "csi" : null
             this.state = { tag: "ground" }
             this.consumePrefix(this.cursor)
             continue
@@ -1754,10 +1771,9 @@ export class StdinParser {
           continue
         }
 
-        // Delayed SGR mouse continuation after `esc_recovery` has consumed the
-        // leading `[`. Reconstruct the already-flushed ESC for valid mouse
-        // reports so wheel/click input still works; keep malformed or partial
-        // bytes opaque so they never leak into text input.
+        // Delayed SGR mouse continuation after its framing prefix was already
+        // timeout-flushed. Restore that prefix for valid reports; keep malformed
+        // or partial bytes opaque so they never leak into text input.
         case "esc_less_mouse": {
           if (this.cursor >= bytes.length) {
             if (!this.forceFlush) {
@@ -1779,7 +1795,7 @@ export class StdinParser {
           if (byte === 0x4d || byte === 0x6d) {
             const end = this.cursor + 1
             const rawBytes = bytes.subarray(this.unitStart, end)
-            const prefixed = withEscPrefix(rawBytes)
+            const prefixed = restoreMousePrefix(rawBytes, this.state.missingPrefix)
             if (isMouseSgrSequence(prefixed)) {
               this.emitMouse(prefixed, "sgr")
             } else {
@@ -1796,12 +1812,11 @@ export class StdinParser {
           continue
         }
 
-        // Delayed X10 mouse continuation after `esc_recovery` has consumed the
-        // leading `[`. Reconstruct the already-flushed ESC for valid mouse
-        // reports so wheel/click input still works; keep malformed or partial
-        // bytes opaque so they never leak into text input.
+        // Delayed X10 mouse continuation after its framing prefix was already
+        // timeout-flushed. Restore that prefix and use the normal mouse path.
         case "esc_less_x10_mouse": {
-          const end = this.unitStart + 5
+          const continuationLength = this.state.missingPrefix === "esc" ? 5 : 4
+          const end = this.unitStart + continuationLength
 
           if (bytes.length < end) {
             if (!this.forceFlush) {
@@ -1816,7 +1831,7 @@ export class StdinParser {
           }
 
           const rawBytes = bytes.subarray(this.unitStart, end)
-          this.emitMouse(withEscPrefix(rawBytes), "x10")
+          this.emitMouse(restoreMousePrefix(rawBytes, this.state.missingPrefix), "x10")
           this.state = { tag: "ground" }
           this.consumePrefix(end)
           continue
@@ -1933,6 +1948,7 @@ export class StdinParser {
     this.pendingTimeoutPaused = false
     this.suspendedPixelResolutionPrefixLength = 0
     this.forceFlush = false
+    this.flushedMousePrefix = null
     this.state = { tag: "ground" }
   }
 
@@ -2064,7 +2080,7 @@ export class StdinParser {
     this.pendingTimeoutPaused = false
     this.suspendedPixelResolutionPrefixLength = 0
     this.forceFlush = false
-    this.justFlushedEsc = false
+    this.flushedMousePrefix = null
     this.state = { tag: "ground" }
     this.cursor = 0
     this.unitStart = 0

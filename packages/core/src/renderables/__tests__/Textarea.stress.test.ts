@@ -530,6 +530,24 @@ describe("Textarea - Stress Tests", () => {
     expect(editor.plainText).not.toContain("[<")
   })
 
+  it("STRESS TEST: delayed SGR continuation after timed-out CSI introducer should not leak into textarea", async () => {
+    const { textarea: editor } = await createTextareaRenderable(currentRenderer, renderOnce, {
+      initialValue: "Original",
+      width: 40,
+      height: 10,
+    })
+
+    editor.focus()
+    const initialText = editor.plainText
+
+    currentRenderer.stdin.emit("data", Buffer.from("\x1b["))
+    currentClock.advance(1000)
+    currentRenderer.stdin.emit("data", Buffer.from("<65;68;29M"))
+
+    expect(editor.plainText).toBe(initialText)
+    expect(editor.plainText).not.toContain("<65;68;29M")
+  })
+
   it("STRESS TEST: alternating mouse and keyboard at high frequency", async () => {
     const { textarea: editor } = await createTextareaRenderable(currentRenderer, renderOnce, {
       initialValue: "",

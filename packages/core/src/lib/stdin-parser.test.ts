@@ -1846,7 +1846,121 @@ describe("StdinParser", () => {
     })
   })
 
-  describe("ESC-less SGR continuation recovery", () => {
+  describe("timeout-flushed mouse continuation recovery", () => {
+    test("after timed-out CSI introducer, scroll continuation becomes a mouse event", () => {
+      const { parser, clock } = createTimedParser()
+      try {
+        parser.push(Buffer.from("\x1b["))
+        clock.advance(10)
+        expect(snap(parser)).toEqual([resp("unknown", "\x1b[")])
+
+        parser.push(Buffer.from("<65;68;29M"))
+        expect(snap(parser)).toEqual([
+          sgr("\x1b[<65;68;29M", "scroll", 67, 28, { button: 1, scroll: { direction: "down", delta: 1 } }),
+        ])
+      } finally {
+        parser.destroy()
+      }
+    })
+
+    test("after timed-out CSI introducer, split continuation is recovered as mouse input", () => {
+      const { parser, clock } = createTimedParser()
+      try {
+        parser.push(Buffer.from("\x1b["))
+        clock.advance(10)
+        expect(snap(parser)).toEqual([resp("unknown", "\x1b[")])
+
+        parser.push(Buffer.from("<"))
+        expect(snap(parser)).toEqual([])
+        parser.push(Buffer.from("35;20;5m"))
+        expect(snap(parser)).toEqual([sgr("\x1b[<35;20;5m", "move", 19, 4)])
+      } finally {
+        parser.destroy()
+      }
+    })
+
+    test("after timed-out CSI introducer, X10 continuation becomes a mouse event", () => {
+      const { parser, clock } = createTimedParser()
+      try {
+        parser.push(Buffer.from("\x1b["))
+        clock.advance(10)
+        expect(snap(parser)).toEqual([resp("unknown", "\x1b[")])
+
+        parser.push(Buffer.from("M"))
+        expect(snap(parser)).toEqual([])
+        parser.push(Buffer.from(" !!"))
+        expect(snap(parser)).toEqual([x10m("\x1b[M !!", "down", 0, 0)])
+      } finally {
+        parser.destroy()
+      }
+    })
+
+    test("after timed-out CSI introducer, unrelated input clears recovery", () => {
+      const { parser, clock } = createTimedParser()
+      try {
+        parser.push(Buffer.from("\x1b["))
+        clock.advance(10)
+        expect(snap(parser)).toEqual([resp("unknown", "\x1b[")])
+
+        parser.push(Buffer.from("A<65;68;29M"))
+        expect(snap(parser)).toEqual([
+          k("a", { raw: "A", shift: true }),
+          ..."<65;68;29".split("").map((char) => k(char)),
+          k("m", { raw: "M", shift: true }),
+        ])
+      } finally {
+        parser.destroy()
+      }
+    })
+
+    test("after timed-out CSI introducer, malformed mouse continuation stays opaque", () => {
+      const { parser, clock } = createTimedParser()
+      try {
+        parser.push(Buffer.from("\x1b["))
+        clock.advance(10)
+        expect(snap(parser)).toEqual([resp("unknown", "\x1b[")])
+
+        parser.push(Buffer.from("<65;x"))
+        expect(snap(parser)).toEqual([resp("unknown", "<65;"), k("x")])
+      } finally {
+        parser.destroy()
+      }
+    })
+
+    test("after timed-out CSI introducer, partial mouse continuation times out atomically", () => {
+      const { parser, clock } = createTimedParser()
+      try {
+        parser.push(Buffer.from("\x1b["))
+        clock.advance(10)
+        expect(snap(parser)).toEqual([resp("unknown", "\x1b[")])
+
+        parser.push(Buffer.from("<65;68"))
+        expect(snap(parser)).toEqual([])
+        clock.advance(10)
+        expect(snap(parser)).toEqual([resp("unknown", "<65;68")])
+      } finally {
+        parser.destroy()
+      }
+    })
+
+    test("reset clears timed-out CSI introducer recovery", () => {
+      const { parser, clock } = createTimedParser()
+      try {
+        parser.push(Buffer.from("\x1b["))
+        clock.advance(10)
+        expect(snap(parser)).toEqual([resp("unknown", "\x1b[")])
+
+        parser.reset()
+        parser.push(Buffer.from("<65;68;29M"))
+        expect(snap(parser)).toEqual([
+          ..."<65;68;29".split("").map((char) => k(char)),
+          k("m", { raw: "M", shift: true }),
+        ])
+      } finally {
+        parser.destroy()
+      }
+    })
+
     test("after timed-out ESC, scroll continuation still becomes a mouse event", () => {
       const { parser, clock } = createTimedParser()
       try {
